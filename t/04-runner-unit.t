@@ -1,0 +1,287 @@
+use strict;
+use warnings;
+
+use File::Path qw(make_path);
+use File::Spec;
+use File::Temp qw(tempdir);
+use Test::More;
+
+use lib 'lib';
+use Browser::Runner;
+
+{
+    package FakeResponse;
+
+    sub new { bless $_[1], $_[0] }
+    sub status { $_[0]{status} }
+    sub text { $_[0]{body} }
+    sub headers { $_[0]{headers} }
+    sub url { $_[0]{url} }
+}
+
+{
+    package FakeRequest;
+
+    sub new { bless $_[1], $_[0] }
+
+    sub post {
+        my ( $self, $url, $options ) = @_;
+        push @{ $self->{calls} }, { url => $url, options => $options };
+        return FakeResponse->new(
+            {
+                status  => 201,
+                body    => defined $options && defined $options->{data} ? $options->{data} : 'posted',
+                headers => { 'content-type' => 'text/plain' },
+                url     => $url,
+            }
+        );
+    }
+}
+
+{
+    package FakePage;
+
+    sub new { bless $_[1], $_[0] }
+    sub goto { $_[0]{goto_args} = [ @_[ 1 .. $#_ ] ]; return $_[0]{response} }
+    sub url { $_[0]{url} }
+    sub title { $_[0]{title} }
+    sub evaluate { push @{ $_[0]{evaluations} }, $_[1]; return $_[0]{evaluate_return} }
+    sub request { $_[0]{request} }
+    sub setContent { $_[0]{set_content} = $_[1]; return 1 }
+}
+
+{
+    package FakeBrowser;
+
+    sub new { bless $_[1], $_[0] }
+    sub newPage { $_[0]{page} }
+}
+
+{
+    package FakePlaywright;
+
+    sub new { bless $_[1], $_[0] }
+    sub launch { $_[0]{launch_args} = { @_[ 1 .. $#_ ] }; return $_[0]{browser} }
+    sub quit { $_[0]{quit_count}++; return 1 }
+}
+
+my $runner = Browser::Runner->new();
+isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner object' );
+
+my $get_page = FakePage->new(
+    {
+        response        => FakeResponse->new( { status => 200 } ),
+        url             => 'https://example.test/final',
+        title           => 'Example',
+        evaluate_return => 'script-value',
+    }
+);
+my $get_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $get_page } ),
+    }
+);
+
+my $get_runner = Browser::Runner->new(
+    playwright_factory => sub { return $get_playwright },
+);
+my $get_result = $get_runner->request(
+    method             => 'GET',
+    url                => 'https://example.test',
+    script             => 'return document.title',
+);
+
+is( $get_result->{method}, 'GET', 'request returns GET payloads' );
+is( $get_result->{status}, 200, 'GET payload keeps the response status' );
+is( $get_result->{title}, 'Example', 'GET payload keeps the page title' );
+is( $get_result->{script_result}, 'script-value', 'GET payload keeps the script result' );
+is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after GET' );
+
+{
+    my $auto_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 204 } ),
+            url      => 'https://example.test/auto',
+            title    => 'Auto',
+        }
+    );
+    my $auto_playwright = FakePlaywright->new(
+        {
+            browser => FakeBrowser->new( { page => $auto_page } ),
+        }
+    );
+    no warnings 'redefine';
+    local *Browser::Runner::_new_playwright = sub { return $auto_playwright };
+    my $auto_result = Browser::Runner->new()->request(
+        method => 'GET',
+        url    => 'https://example.test/auto',
+    );
+    is( $auto_result->{status}, 204, 'request falls back to _new_playwright when no factory is configured' );
+}
+
+my $post_page = FakePage->new(
+    {
+        request         => FakeRequest->new( { calls => [] } ),
+        evaluate_return => 'post-script',
+    }
+);
+my $post_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $post_page } ),
+    }
+);
+
+my $post_runner = Browser::Runner->new(
+    playwright_factory => sub { return $post_playwright },
+);
+my $post_result = $post_runner->request(
+    method             => 'POST',
+    url                => 'https://example.test/form',
+    data               => 'name=dashboard',
+    script             => 'return window.__BROWSER_POST__.status',
+);
+
+is( $post_result->{method}, 'POST', 'request returns POST payloads' );
+is( $post_result->{status}, 201, 'POST payload keeps the response status' );
+is( $post_result->{body}, 'name=dashboard', 'POST payload keeps the response body' );
+like( $post_page->{set_content}, qr/browser-post-body/, 'POST payloads wrap plain text into a DOM document' );
+is( $post_page->{request}{calls}[0]{options}{data}, 'name=dashboard', 'POST passes request data through' );
+is( $post_playwright->{quit_count}, 1, 'request quits the Playwright handle after POST' );
+
+my $post_no_data_page = FakePage->new(
+    {
+        request => FakeRequest->new( { calls => [] } ),
+    }
+);
+my $post_no_data = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $post_no_data_page } ),
+    }
+);
+my $post_no_data_runner = Browser::Runner->new(
+    playwright_factory => sub { return $post_no_data },
+);
+$post_no_data_runner->request(
+    method             => 'POST',
+    url                => 'https://example.test/plain',
+);
+ok( !defined $post_no_data_page->{request}{calls}[0]{options}, 'POST omits request options when no body is supplied' );
+
+my $error_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new(
+            {
+                page => bless {}, 'FakeBrokenPage',
+            }
+        ),
+    }
+);
+{
+    package FakeBrokenPage;
+    sub goto { die "broken page\n" }
+}
+my $error_runner = Browser::Runner->new(
+    playwright_factory => sub { return $error_playwright },
+);
+eval {
+    $error_runner->request(
+        method             => 'GET',
+        url                => 'https://broken.test',
+    );
+};
+like( $@, qr/broken page/, 'request rethrows browser errors' );
+is( $error_playwright->{quit_count}, 1, 'request still quits the Playwright handle after an error' );
+
+eval { $runner->request( method => 'DELETE', url => 'https://example.test' ) };
+like( $@, qr/Unsupported method: DELETE/, 'request rejects unsupported methods' );
+
+{
+    local $ENV{CHROMIUM_BIN};
+    my %launch = Browser::Runner::_launch_options(
+        browser  => 'chromium',
+        headless => 1,
+    );
+    is( $launch{type}, 'chrome', 'launch options map chromium onto the Playwright-supported chrome type' );
+    is( $launch{headless}, 1, 'launch options keep headless true when requested' );
+    ok( !exists $launch{executablePath}, 'launch options do not force an executable when CHROMIUM_BIN is absent' );
+}
+
+{
+    local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = '/tmp/browser-skill-root';
+    is( Browser::Runner::_skill_root(), '/tmp/browser-skill-root', 'skill root prefers the DD skill root environment variable' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    make_path( File::Spec->catdir( $temp_root, 'cli' ) );
+    make_path( File::Spec->catdir( $temp_root, 'lib' ) );
+    my $cwd = Cwd::getcwd();
+    chdir $temp_root or die "Unable to chdir to temp root: $!";
+    is( Browser::Runner::_skill_root(), $temp_root, 'skill root falls back to the current skill repo during local development' );
+    chdir $cwd or die "Unable to restore cwd: $!";
+}
+
+{
+    local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT};
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $cwd = Cwd::getcwd();
+    chdir $temp_root or die "Unable to chdir to fallback temp root: $!";
+    like( Browser::Runner::_skill_root(), qr/(?:\.|skills\/browser)\z/, 'skill root can fall back to the module path' );
+    chdir $cwd or die "Unable to restore cwd after module-path fallback test: $!";
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    make_path( File::Spec->catdir( $temp_root, 'local', 'playwright-node', 'node_modules', 'playwright' ) );
+    make_path( File::Spec->catdir( $temp_root, 'local', 'playwright-node', 'node_modules', 'express' ) );
+    make_path( File::Spec->catdir( $temp_root, 'local', 'playwright-node', 'node_modules', 'uuid' ) );
+    local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
+    local $ENV{NODE_PATH} = q{};
+    my $runtime = Browser::Runner::_ensure_node_runtime();
+    like( $runtime, qr/playwright-node\z/, 'ensure_node_runtime returns the runtime path' );
+    like( $ENV{NODE_PATH}, qr/node_modules/, 'ensure_node_runtime prepends the runtime node_modules path' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
+    local $ENV{NODE_PATH} = q{};
+    no warnings 'redefine';
+    local *Browser::Runner::_run_in_dir = sub {
+        my ( $dir, @command ) = @_;
+        is( $dir, File::Spec->catdir( $temp_root, 'local', 'playwright-node' ), 'ensure_node_runtime installs node modules into the skill-local runtime path' );
+        is_deeply( \@command, [ qw(npm install --no-save playwright express uuid) ], 'ensure_node_runtime uses the expected npm command' );
+        return 0;
+    };
+    Browser::Runner::_ensure_node_runtime();
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $exit = Browser::Runner::_run_in_dir( $temp_root, 'pwd' );
+    is( $exit, 0, '_run_in_dir returns zero for a successful command' );
+}
+
+eval { Browser::Runner::_run_in_dir( '/definitely/missing/path', 'pwd' ) };
+like( $@, qr/Unable to chdir/, '_run_in_dir reports bad working directories' );
+
+eval { Browser::Runner::_run_in_dir( tempdir( CLEANUP => 1 ), 'false' ) };
+like( $@, qr/Command failed/, '_run_in_dir reports failed commands' );
+
+{
+    no warnings 'redefine';
+    local *Browser::Runner::_ensure_node_runtime = sub { return '/tmp/browser-node'; };
+    local $INC{'Playwright.pm'} = __FILE__;
+    local $SIG{__WARN__} = sub {
+        return if $_[0] =~ /Subroutine new redefined/;
+        warn $_[0];
+    };
+    {
+        package Playwright;
+        sub new { return bless { source => 'stub' }, shift }
+    }
+    my $playwright = Browser::Runner::_new_playwright();
+    is( ref $playwright, 'Playwright', '_new_playwright loads and instantiates Playwright' );
+}
+
+done_testing();

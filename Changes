@@ -1,0 +1,6 @@
+Revision history for browser
+
+0.01 2026-04-21
+ - bootstrap the browser skill with Playwright-backed GET and POST CLI commands
+ - add dependency files for nodejs and the Playwright Perl module
+ - add Docker-tested coverage, documentation, and ticket records
