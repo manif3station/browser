@@ -1,0 +1,11 @@
+{
+  "name": "browser-skill",
+  "version": "0.01.0",
+  "private": true,
+  "description": "Developer Dashboard browser skill Node runtime dependencies",
+  "dependencies": {
+    "express": "^5.1.0",
+    "playwright": "^1.55.1",
+    "uuid": "^13.0.0"
+  }
+}

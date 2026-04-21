@@ -21,5 +21,5 @@ The skill ships:
 - `lib/Browser/CLI.pm` for CLI parsing and output
 - `lib/Browser/Runner.pm` for Playwright execution
 - dependency files for DD skill installation on Debian-family and macOS hosts
-- a skill-local Node runtime bootstrap path under `local/playwright-node/`
+- a `package.json` file for DD-managed Node dependency installation into `$HOME`
 - skill-local tests, docs, ticket records, versioning, and changelog files

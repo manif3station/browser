@@ -24,7 +24,17 @@ Each command prints one JSON object to stdout. The payload includes the request 
 
 For `browser.get`, the payload also includes the page title. For `browser.post`, the payload also includes the response body so the caller can inspect returned content from the CLI.
 
-On first use, the skill may bootstrap Playwright's required Node-side packages into `local/playwright-node/`. That keeps the runtime isolated to the skill instead of assuming a global Node module install.
+The skill declares its Node-side dependencies in `package.json`, matching the DD skill dependency contract. DD installs that file with:
+
+```bash
+npm install --prefix "$HOME" <skill-root>
+```
+
+For direct local development outside DD, use:
+
+```bash
+npm install --prefix "$HOME" .
+```
 
 ## Script Behavior
 
@@ -45,4 +55,4 @@ For `browser.post`, the skill loads the response content into a page before eval
 - if Playwright dependencies are missing, the command will fail until DD installs the skill dependencies
 - if the target URL cannot be reached, Playwright raises an error and the command exits non-zero
 - if a POST response is not HTML, the skill wraps the body in a simple HTML document so a DOM-based script can still inspect it
-- if the Node runtime has not been prepared yet, the first command run can take longer while the skill installs `playwright`, `express`, and `uuid` into `local/playwright-node/`
+- if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill installs `playwright`, `express`, and `uuid` into `$HOME/node_modules`

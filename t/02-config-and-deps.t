@@ -9,6 +9,7 @@ use Browser::Runner;
 ok( -f 'config/config.json', 'skill keeps a config/config.json file' );
 ok( -f 'aptfile', 'skill declares Debian-family packages in aptfile' );
 ok( -f 'brewfile', 'skill declares macOS packages in brewfile' );
+ok( -f 'package.json', 'skill declares Node dependencies in package.json' );
 ok( -f 'cpanfile', 'skill declares shared Perl dependencies in cpanfile' );
 
 my $aptfile = do {
@@ -31,6 +32,15 @@ my $cpanfile = do {
     <$fh>;
 };
 like( $cpanfile, qr/requires 'Playwright';/, 'cpanfile includes the Playwright module' );
+
+my $package_json = do {
+    open my $fh, '<', 'package.json' or die "Unable to read package.json: $!";
+    local $/;
+    <$fh>;
+};
+like( $package_json, qr/"playwright"\s*:/, 'package.json includes playwright' );
+like( $package_json, qr/"express"\s*:/, 'package.json includes express' );
+like( $package_json, qr/"uuid"\s*:/, 'package.json includes uuid' );
 
 my %launch = Browser::Runner::_launch_options(
     browser  => 'chrome',

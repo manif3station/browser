@@ -5,7 +5,6 @@ use warnings;
 
 use Cwd qw(getcwd);
 use File::Basename qw(dirname);
-use File::Path qw(make_path);
 use File::Spec;
 use JSON::PP qw(encode_json);
 
@@ -50,20 +49,22 @@ sub _new_playwright {
 
 sub _ensure_node_runtime {
     my $skill_root = _skill_root();
-    my $runtime_root = File::Spec->catdir( $skill_root, 'local', 'playwright-node' );
-    my $node_modules = File::Spec->catdir( $runtime_root, 'node_modules' );
+    my $home_root = $ENV{HOME} || die 'HOME is required for browser skill Node dependencies';
+    my $package_json = File::Spec->catfile( $skill_root, 'package.json' );
+    die "Missing package.json in $skill_root" if !-f $package_json;
+
+    my $node_modules = File::Spec->catdir( $home_root, 'node_modules' );
     my $playwright = File::Spec->catdir( $node_modules, 'playwright' );
     my $express    = File::Spec->catdir( $node_modules, 'express' );
     my $uuid       = File::Spec->catdir( $node_modules, 'uuid' );
 
-    make_path($runtime_root) if !-d $runtime_root;
     if ( !-d $playwright || !-d $express || !-d $uuid ) {
         local $ENV{PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD} = 1;
-        _run_in_dir( $runtime_root, qw(npm install --no-save playwright express uuid) );
+        _run_command( 'npm', 'install', '--prefix', $home_root, $skill_root );
     }
 
     $ENV{NODE_PATH} = join ':', grep { defined && $_ ne q{} } $node_modules, $ENV{NODE_PATH};
-    return $runtime_root;
+    return $node_modules;
 }
 
 sub _launch_options {
@@ -93,6 +94,13 @@ sub _run_in_dir {
     chdir $cwd or die "Unable to restore cwd $cwd: $!";
     die "Command failed in $dir: @command" if !$ok;
     return $exit;
+}
+
+sub _run_command {
+    my (@command) = @_;
+    my $ok = system(@command) == 0;
+    die "Command failed: @command" if !$ok;
+    return $? >> 8;
 }
 
 sub _run_get {

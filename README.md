@@ -28,7 +28,7 @@ Without a shared skill, quick browser-driven automation often ends up split acro
 - optional `--script` evaluation through the Playwright Perl module
 - optional `--data` for `browser.post`
 - DD dependency files so the skill can install its Perl and system prerequisites
-- a skill-local Node runtime bootstrap under `local/playwright-node/` when Playwright's Node packages are not present yet
+- `package.json` so DD can install the Node runtime dependencies into `$HOME`
 
 ## Developer Dashboard Feature Added
 
@@ -45,7 +45,7 @@ This skill adds:
 - `config/config.json` skill-local config placeholder
 - `lib/Browser/CLI.pm` CLI parsing and JSON output
 - `lib/Browser/Runner.pm` Playwright execution
-- `aptfile`, `brewfile`, and `cpanfile` dependency declarations
+- `aptfile`, `brewfile`, `package.json`, and `cpanfile` dependency declarations
 - `t/` skill-local tests
 - `docs/` skill-local documentation
 - `tickets/` skill-local project-management records
@@ -85,7 +85,11 @@ dashboard browser.post https://example.com/form --data 'name=dashboard'
 dashboard browser.post https://example.com/form --script 'return window.__BROWSER_POST__.status'
 ```
 
-On first use, the skill can prepare the Playwright Node-side packages under `local/playwright-node/` so the Perl wrapper has its required `playwright`, `express`, and `uuid` runtime dependencies.
+The skill ships `package.json` so DD can install the required Node packages with its normal skill dependency flow. For direct local development, the same dependency shape can be prepared with:
+
+```bash
+npm install --prefix "$HOME" .
+```
 
 ## Practical Examples
 
@@ -119,7 +123,7 @@ dashboard skills uninstall browser
 - if Playwright or node dependencies are missing, the command fails until skill dependencies are installed
 - if the target host is unavailable, the Playwright run exits non-zero
 - if a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect
-- if the local Node runtime has not been prepared yet, the first command run may take longer while it bootstraps `local/playwright-node/`
+- if the Node runtime has not been installed from `package.json` yet, the first command run may take longer while it runs the same `npm install --prefix "$HOME" <skill-root>` flow DD uses
 
 ## Documentation
 

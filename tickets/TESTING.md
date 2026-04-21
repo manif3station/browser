@@ -9,6 +9,7 @@ docker compose -f ~/projects/skills/docker-compose.testing.yml run --rm perl-tes
 set -euo pipefail
 cd /workspace/skills/browser
 cpanm --notest -L /root/perl5 --cpanfile cpanfile --installdeps .
+npm install --prefix "$HOME" .
 export PERL5LIB=/root/perl5/lib/perl5${PERL5LIB:+:$PERL5LIB}
 export PATH=/root/perl5/bin:$PATH
 prove -lr t
@@ -22,6 +23,7 @@ docker compose -f ~/projects/skills/docker-compose.testing.yml run --rm perl-tes
 set -euo pipefail
 cd /workspace/skills/browser
 cpanm --notest -L /root/perl5 --cpanfile cpanfile --installdeps .
+npm install --prefix "$HOME" .
 export PERL5LIB=/root/perl5/lib/perl5${PERL5LIB:+:$PERL5LIB}
 export PATH=/root/perl5/bin:$PATH
 cover -delete
@@ -42,4 +44,3 @@ cover -report text
 ## Cleanup
 
 - remove `cover_db` after verification
-- remove `local/playwright-node/` before release closeout so the repository stays lean

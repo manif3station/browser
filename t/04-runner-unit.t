@@ -232,28 +232,51 @@ like( $@, qr/Unsupported method: DELETE/, 'request rejects unsupported methods' 
 
 {
     my $temp_root = tempdir( CLEANUP => 1 );
-    make_path( File::Spec->catdir( $temp_root, 'local', 'playwright-node', 'node_modules', 'playwright' ) );
-    make_path( File::Spec->catdir( $temp_root, 'local', 'playwright-node', 'node_modules', 'express' ) );
-    make_path( File::Spec->catdir( $temp_root, 'local', 'playwright-node', 'node_modules', 'uuid' ) );
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'playwright' ) );
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'express' ) );
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'uuid' ) );
+    open my $package_fh, '>', File::Spec->catfile( $temp_root, 'package.json' ) or die "Unable to write temp package.json: $!";
+    print {$package_fh} qq|{"name":"browser-skill-test","version":"0.01.0"}\n|;
+    close $package_fh or die "Unable to close temp package.json: $!";
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
+    local $ENV{HOME} = $temp_root;
     local $ENV{NODE_PATH} = q{};
     my $runtime = Browser::Runner::_ensure_node_runtime();
-    like( $runtime, qr/playwright-node\z/, 'ensure_node_runtime returns the runtime path' );
+    like( $runtime, qr/node_modules\z/, 'ensure_node_runtime returns the home node_modules path' );
     like( $ENV{NODE_PATH}, qr/node_modules/, 'ensure_node_runtime prepends the runtime node_modules path' );
 }
 
 {
     my $temp_root = tempdir( CLEANUP => 1 );
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
+    local $ENV{HOME} = $temp_root;
     local $ENV{NODE_PATH} = q{};
     no warnings 'redefine';
-    local *Browser::Runner::_run_in_dir = sub {
-        my ( $dir, @command ) = @_;
-        is( $dir, File::Spec->catdir( $temp_root, 'local', 'playwright-node' ), 'ensure_node_runtime installs node modules into the skill-local runtime path' );
-        is_deeply( \@command, [ qw(npm install --no-save playwright express uuid) ], 'ensure_node_runtime uses the expected npm command' );
+    open my $package_fh, '>', File::Spec->catfile( $temp_root, 'package.json' ) or die "Unable to write temp package.json: $!";
+    print {$package_fh} qq|{"name":"browser-skill-test","version":"0.01.0"}\n|;
+    close $package_fh or die "Unable to close temp package.json: $!";
+    local *Browser::Runner::_run_command = sub {
+        my (@command) = @_;
+        is_deeply( \@command, [ 'npm', 'install', '--prefix', $temp_root, $temp_root ], 'ensure_node_runtime uses DD package.json install behavior under HOME' );
         return 0;
     };
     Browser::Runner::_ensure_node_runtime();
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
+    local $ENV{HOME};
+    eval { Browser::Runner::_ensure_node_runtime() };
+    like( $@, qr/HOME is required/, '_ensure_node_runtime requires HOME for DD-style package.json installs' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
+    local $ENV{HOME} = $temp_root;
+    eval { Browser::Runner::_ensure_node_runtime() };
+    like( $@, qr/Missing package\.json/, '_ensure_node_runtime requires package.json under the skill root' );
 }
 
 {
@@ -267,6 +290,12 @@ like( $@, qr/Unable to chdir/, '_run_in_dir reports bad working directories' );
 
 eval { Browser::Runner::_run_in_dir( tempdir( CLEANUP => 1 ), 'false' ) };
 like( $@, qr/Command failed/, '_run_in_dir reports failed commands' );
+
+eval { Browser::Runner::_run_command('false') };
+like( $@, qr/Command failed/, '_run_command reports failed commands' );
+
+my $command_exit = Browser::Runner::_run_command('true');
+is( $command_exit, 0, '_run_command returns zero for a successful command' );
 
 {
     no warnings 'redefine';

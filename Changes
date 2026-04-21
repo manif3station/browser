@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.02 2026-04-21
+ - add package.json for DD-managed Node dependency installation
+ - align browser runtime bootstrap with DD package.json install behavior under $HOME
+ - update tests and docs for the package.json dependency gate
+
 0.01 2026-04-21
  - bootstrap the browser skill with Playwright-backed GET and POST CLI commands
  - add dependency files for nodejs and the Playwright Perl module
