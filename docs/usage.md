@@ -59,6 +59,10 @@ dashboard browser.post https://example.com/form --data "name=dd" --script 'retur
 
 For `browser.post`, the skill loads the response content into a page before evaluating the script. It also exposes response metadata through `window.__BROWSER_POST__`.
 
+Use JavaScript mode when you want to inspect the current page only.
+
+Use Perl controller mode when you need to click, fill, navigate, log in, or continue across pages.
+
 ## Controller Mode
 
 `--playwright`, `--agent`, and `--flow` are equivalent flags. Any of them switches `--script` from page-context JavaScript into a Perl Playwright controller script.
@@ -100,6 +104,8 @@ Example:
 dashboard browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
 ```
 
+`--jquery` is for page-side extraction. It does not change Perl controller syntax.
+
 ## Interactive Mode
 
 `browser.get` accepts `--ask` and `--askme` as the same interactive mode.
@@ -131,6 +137,16 @@ If you still want a bounded initial wait in ask-mode:
 ```bash
 dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 ```
+
+## Example Library
+
+The full example library is kept in `README.md` and includes:
+
+- JavaScript extraction examples
+- jQuery extraction examples
+- one-page Perl controller examples
+- multi-page Perl flow examples
+- normal cases and edge cases
 
 ## Captcha Detection
 

@@ -2,39 +2,33 @@
 
 ## Description
 
-`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It gives DD users a reusable way to fetch a page, run either a page-context JavaScript snippet or a full Playwright control script, and issue browser-managed POST requests from the command line.
+`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It lets DD users fetch pages, inspect the DOM with JavaScript, inject jQuery for page-side extraction, or run Perl controller scripts for real browser journeys.
 
 ## Value
 
-The skill brings browser automation into DD without requiring each user to build their own one-off Playwright wrapper first.
+The skill gives a DD user one installable tool for:
 
-It helps a user:
-
-- inspect a page through a real browser session
-- run a small DOM task directly from the CLI
-- run a multi-page browser journey from one starting URL
-- issue a POST request and inspect the returned content
-- keep this automation isolated in an installable DD skill
+- reading browser-rendered HTML from the CLI
+- extracting values from the current page with JavaScript
+- using jQuery-style selectors without requiring the target page to ship jQuery
+- automating clicks, fills, navigation, and multi-page flows with Perl controller scripts
+- pausing for manual CAPTCHA or login work and then continuing
 
 ## Problem It Solves
 
-Without a shared skill, quick browser-driven automation often ends up split across shell history, ad-hoc Node scripts, and throwaway Perl wrappers. That makes repeatable browser tasks harder to share and harder to rerun through Developer Dashboard.
+Without a shared browser skill, quick browser tasks usually fragment into shell snippets, one-off Node scripts, and ad hoc Playwright experiments. That makes them hard to share, hard to rerun, and hard to align with the DD skill system.
 
 ## What It Does To Solve It
 
 `browser` provides:
 
-- `cli/get` for `dashboard browser.get <url>`
-- `cli/post` for `dashboard browser.post <url>`
-- HTML page body output for `browser.get`
-- text extraction, content type reporting, and captcha detection for browser responses
+- `dashboard browser.get <url>`
+- `dashboard browser.post <url>`
+- JavaScript page-context scripting through `--script`
+- Perl controller scripting through `--playwright`, `--agent`, or `--flow`
+- jQuery injection through `--jquery`
 - interactive visible-browser takeover through `--ask` and `--askme`
-- optional jQuery injection through `--jquery`
-- optional page-context JavaScript through `--script`
-- optional Playwright controller mode through `--playwright`, `--agent`, and `--flow`
-- optional `--data` for `browser.post`
-- DD dependency files so the skill can install its Perl and system prerequisites
-- `package.json` so DD can install the Node runtime dependencies into `$HOME`
+- HTML body, text body, status, final URL, and CAPTCHA detection in the output payload
 
 ## Developer Dashboard Feature Added
 
@@ -42,25 +36,24 @@ This skill adds:
 
 - the dotted command `dashboard browser.get`
 - the dotted command `dashboard browser.post`
-- a reusable example of a skill that depends on `aptfile`, `brewfile`, and `cpanfile`
+- a DD skill example that depends on `aptfile`, `brewfile`, `cpanfile`, and `package.json`
 
 ## Layout
 
-- `cli/get` skill CLI GET entrypoint
-- `cli/post` skill CLI POST entrypoint
-- `config/config.json` skill-local config placeholder
+- `cli/get` GET entrypoint
+- `cli/post` POST entrypoint
 - `lib/Browser/CLI.pm` CLI parsing and JSON output
 - `lib/Browser/Runner.pm` Playwright execution
 - `aptfile`, `brewfile`, `package.json`, and `cpanfile` dependency declarations
-- `t/` skill-local tests
-- `docs/` skill-local documentation
-- `tickets/` skill-local project-management records
-- `.env` skill-local version metadata
-- `Changes` skill-local changelog
+- `t/` tests
+- `docs/` skill docs
+- `tickets/` project-management records
+- `.env` version metadata
+- `Changes` changelog
 
 ## Installation
 
-Install the skill through Developer Dashboard from a git repository:
+Install through Developer Dashboard:
 
 ```bash
 dashboard skills install <git-url-to-browser-skill>
@@ -72,7 +65,24 @@ Example:
 dashboard skills install git@github.mf:manif3station/browser.git
 ```
 
+For direct local development, prepare the Node-side runtime with:
+
+```bash
+npm install --prefix "$HOME" .
+```
+
 ## CLI Usage
+
+Installed DD usage:
+
+```bash
+dashboard browser.get https://example.com
+dashboard browser.get https://example.com --script 'return document.title'
+dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
+dashboard browser.get https://example.com/login --ask --timeout-ms 120000
+dashboard browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+dashboard browser.post https://example.com/form --data 'name=dashboard'
+```
 
 Direct local development:
 
@@ -81,113 +91,503 @@ perl cli/get https://example.com
 perl cli/post https://example.com/form --data 'name=dashboard'
 ```
 
-Installed DD usage:
+## Mode Selection
+
+Use JavaScript mode when:
+
+- you only need to inspect the current page
+- you want to extract text, attributes, links, headings, JSON blobs, or table rows
+- you want to use `--jquery`
+- you do not need to click, fill, navigate, or continue through a journey
+
+Use Perl controller mode when:
+
+- you need to click something
+- you need to fill a form
+- you need to navigate to another page
+- you need to handle a login flow
+- you need a sequence of actions across one or more pages
+- you want `--ask` and then scripted continuation
+
+Use `--jquery` when:
+
+- you are in JavaScript mode
+- you want jQuery-style page extraction helpers like `window.jQuery(...)`
+- the target page does not already provide jQuery
+
+Do not use `--jquery` for Perl logic:
+
+- `--jquery` injects jQuery into the page
+- Perl controller scripts run outside the page
+- if a Perl controller script needs jQuery-powered extraction, call `$page->evaluate(...)` and use `window.jQuery(...)` inside that JavaScript
+
+## Script Types
+
+Default `--script` mode is JavaScript:
 
 ```bash
-dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
-dashboard browser.get https://example.com --ask
-dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
-dashboard browser.get https://example.com --flow --script 'my $response = $page->goto("https://example.com/next", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
-dashboard browser.get https://example.com/login --ask --timeout-ms 120000
-dashboard browser.post https://example.com/form
-dashboard browser.post https://example.com/form --data 'name=dashboard'
-dashboard browser.post https://example.com/form --script 'return window.__BROWSER_POST__.status'
 ```
 
-The skill ships `package.json` so DD can install the required Node packages with its normal skill dependency flow. For direct local development, the same dependency shape can be prepared with:
+Controller mode changes `--script` into Perl:
 
 ```bash
-npm install --prefix "$HOME" .
+dashboard browser.get https://example.com/login --playwright --script '
+my $button = $page->select(q{button[type="submit"]});
+$button->click();
+return { url => $page->url(), title => $page->title() };
+'
 ```
 
-## Practical Examples
+Controller-mode aliases are equivalent:
 
-Normal case, fetch a page title:
+- `--playwright`
+- `--agent`
+- `--flow`
+
+## Normal Cases
+
+### JavaScript Mode Examples
+
+1. Get the page title.
 
 ```bash
 dashboard browser.get https://example.com --script 'return document.title'
 ```
 
-Normal case, fetch the rendered HTML body:
+2. Get the first `h1`.
 
 ```bash
-dashboard browser.get https://example.com
+dashboard browser.get https://example.com --script 'return document.querySelector("h1")?.textContent?.trim() || null'
 ```
 
-Normal case, inspect whether a page looks like a bot-check:
+3. Count links on the page.
 
 ```bash
-dashboard browser.get 'https://www.google.com/search?q=developer+dashboard'
+dashboard browser.get https://example.com --script 'return document.querySelectorAll("a").length'
 ```
 
-The payload now includes:
-
-- `content_type`
-- `body_text`
-- `is_captcha`
-
-Normal case, open a visible browser so you can complete a captcha or login and then continue:
+4. Return all link URLs.
 
 ```bash
-dashboard browser.get 'https://www.google.com/search?q=developer+dashboard' --ask
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("a")).map(a => a.href)'
 ```
 
-`--askme` is accepted as the same interaction mode.
+5. Return visible page text.
 
-For interactive login pages, the initial browser navigation now waits for the normal page `load` event instead of `networkidle`, and it disables the initial timeout unless you set `--timeout-ms` explicitly.
+```bash
+dashboard browser.get https://example.com --script 'return document.body ? document.body.innerText : ""'
+```
 
-Normal case, inject jQuery so the script can use `$()` selectors:
+6. Read a meta description.
+
+```bash
+dashboard browser.get https://example.com --script 'return document.querySelector("meta[name=description]")?.content || null'
+```
+
+7. Read a canonical URL.
+
+```bash
+dashboard browser.get https://example.com --script 'return document.querySelector("link[rel=canonical]")?.href || null'
+```
+
+8. Return all `h2` headings.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("h2")).map(el => el.textContent.trim())'
+```
+
+9. Read a table into objects.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("table tr")).map(tr => Array.from(tr.querySelectorAll("th,td")).map(td => td.textContent.trim()))'
+```
+
+10. Read image alt text.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("img")).map(img => ({ src: img.src, alt: img.alt }))'
+```
+
+11. Extract all buttons.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("button")).map(btn => btn.textContent.trim())'
+```
+
+12. Find JSON-LD blocks.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("script[type=\"application/ld+json\"]")).map(s => s.textContent)'
+```
+
+13. Return all form field names.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("input, textarea, select")).map(el => ({ name: el.name || null, type: el.type || el.tagName }))'
+```
+
+14. Inspect the current location object.
+
+```bash
+dashboard browser.get https://example.com --script 'return { href: location.href, host: location.host, path: location.pathname }'
+```
+
+15. Read the first paragraph.
+
+```bash
+dashboard browser.get https://example.com --script 'return document.querySelector("p")?.textContent?.trim() || null'
+```
+
+16. Get all text from a specific section.
+
+```bash
+dashboard browser.get https://example.com --script 'return document.querySelector("main")?.innerText || null'
+```
+
+17. Detect if a login form exists.
+
+```bash
+dashboard browser.get https://example.com --script 'return !!document.querySelector("input[type=password]")'
+```
+
+18. Read selected attributes from cards.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll(".card")).map(card => ({ id: card.id || null, text: card.textContent.trim() }))'
+```
+
+19. Extract the first five rows from a list.
+
+```bash
+dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("li")).slice(0, 5).map(li => li.textContent.trim())'
+```
+
+20. Return a page summary object.
+
+```bash
+dashboard browser.get https://example.com --script 'return { title: document.title, h1: document.querySelector("h1")?.textContent || null, links: document.querySelectorAll("a").length }'
+```
+
+### jQuery Mode Examples
+
+21. Read the first `h1` with jQuery.
 
 ```bash
 dashboard browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
 ```
 
-Normal case, run a full multi-page Playwright flow from one starting URL:
+22. Count all links with jQuery.
 
 ```bash
-dashboard browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("a").length'
 ```
 
-Normal case, pause for manual login or CAPTCHA work and then continue with a Playwright flow:
+23. Collect all link URLs with jQuery.
 
 ```bash
-dashboard browser.get https://example.com/login --ask --playwright --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("a").map((_, el) => el.href).get()'
 ```
 
-Normal case, inspect a heading:
+24. Read visible text from `main` with jQuery.
 
 ```bash
-dashboard browser.get https://example.com --script 'return document.querySelector("h1").textContent'
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("main").text().trim()'
 ```
 
-Normal case, issue a POST and inspect the returned body:
+25. Read table rows with jQuery.
 
 ```bash
-dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("table tr").map((_, tr) => window.jQuery(tr).text().trim()).get()'
 ```
 
-Normal case, remove the skill:
+26. Read all button labels with jQuery.
 
 ```bash
-dashboard skills uninstall browser
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("button").map((_, el) => window.jQuery(el).text().trim()).get()'
+```
+
+27. Filter links that contain `docs`.
+
+```bash
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("a").filter((_, el) => (el.href || "").includes("docs")).map((_, el) => el.href).get()'
+```
+
+28. Read input placeholders.
+
+```bash
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("input").map((_, el) => ({ name: el.name || null, placeholder: el.placeholder || null })).get()'
+```
+
+29. Read card titles.
+
+```bash
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery(".card h2").map((_, el) => window.jQuery(el).text().trim()).get()'
+```
+
+30. Read `data-*` attributes.
+
+```bash
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("[data-id]").map((_, el) => ({ id: window.jQuery(el).data("id"), text: window.jQuery(el).text().trim() })).get()'
+```
+
+### Perl Controller Examples For One Page
+
+31. Click a button on the current page, then report the new title.
+
+```bash
+dashboard browser.get https://example.com --playwright --script '
+my $button = $page->select(q{button});
+$button->click() if $button;
+sleep 1;
+return { title => $page->title(), url => $page->url() };
+'
+```
+
+32. Fill a search input and click submit.
+
+```bash
+dashboard browser.get https://example.com --playwright --script '
+my $input = $page->select(q{input[type="search"], input[name="q"]});
+$input->fill("developer dashboard") if $input;
+my $submit = $page->select(q{button[type="submit"], input[type="submit"]});
+$submit->click() if $submit;
+sleep 2;
+return { title => $page->title(), url => $page->url() };
+'
+```
+
+33. Extract page text from Perl after a click.
+
+```bash
+dashboard browser.get https://example.com --playwright --script '
+my $tab = $page->select(q{button[data-tab="details"]});
+$tab->click() if $tab;
+sleep 1;
+my $text = $page->evaluate(q{return document.body.innerText});
+return { text => $text };
+'
+```
+
+34. Trigger a menu open and then inspect buttons.
+
+```bash
+dashboard browser.get https://example.com --playwright --script '
+my $menu = $page->select(q{button[aria-label*="Menu"]});
+$menu->click() if $menu;
+sleep 1;
+my $items = $page->evaluate(q{return Array.from(document.querySelectorAll("button,a")).map(el => (el.innerText || "").trim()).filter(Boolean)});
+return { items => $items };
+'
+```
+
+35. Fill email and password fields without leaving the page.
+
+```bash
+dashboard browser.get https://example.com/login --playwright --script '
+my $email = $page->select(q{input[type="email"], input[name="email"]});
+$email->fill("user@example.com") if $email;
+my $password = $page->select(q{input[type="password"], input[name="password"]});
+$password->fill("secret") if $password;
+return { title => $page->title(), url => $page->url() };
+'
+```
+
+36. Click a checkbox and inspect the checked state.
+
+```bash
+dashboard browser.get https://example.com/preferences --playwright --script '
+my $box = $page->select(q{input[type="checkbox"]});
+$box->click() if $box;
+my $checked = $page->evaluate(q{return document.querySelector("input[type=\"checkbox\"]")?.checked || false});
+return { checked => $checked };
+'
+```
+
+37. Open a modal and read its content.
+
+```bash
+dashboard browser.get https://example.com --playwright --script '
+my $open = $page->select(q{button[data-open="modal"]});
+$open->click() if $open;
+sleep 1;
+my $modal = $page->evaluate(q{return document.querySelector(".modal, [role=\"dialog\"]")?.innerText || null});
+return { modal => $modal };
+'
+```
+
+38. Trigger a sort and read the reordered rows.
+
+```bash
+dashboard browser.get https://example.com/table --playwright --script '
+my $sort = $page->select(q{button[data-sort="name"]});
+$sort->click() if $sort;
+sleep 1;
+my $rows = $page->evaluate(q{return Array.from(document.querySelectorAll("table tr")).map(tr => tr.innerText.trim())});
+return { rows => $rows };
+'
+```
+
+39. Use Perl control with page-side jQuery extraction.
+
+```bash
+dashboard browser.get https://example.com --playwright --jquery --script '
+my $text = $page->evaluate(q{return window.jQuery("h1").first().text()});
+return { heading => $text };
+'
+```
+
+40. Pause for manual login, then inspect the current page.
+
+```bash
+dashboard browser.get https://example.com/login --ask --playwright --script '
+return { title => $page->title(), url => $page->url() };
+'
+```
+
+### Perl Controller Examples For Multi-Page Flows
+
+41. Jump from one page to another with `goto`.
+
+```bash
+dashboard browser.get https://example.com/start --flow --script '
+my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" });
+return { url => $page->url(), status => $response->status(), title => $page->title() };
+'
+```
+
+42. Login page, then go to account.
+
+```bash
+dashboard browser.get https://example.com/login --playwright --script '
+my $email = $page->select(q{input[type="email"]});
+$email->fill("user@example.com") if $email;
+my $password = $page->select(q{input[type="password"]});
+$password->fill("secret") if $password;
+my $submit = $page->select(q{button[type="submit"]});
+$submit->click() if $submit;
+sleep 2;
+my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" });
+return { url => $page->url(), status => $response->status(), title => $page->title() };
+'
+```
+
+43. Manual login first, then go to billing.
+
+```bash
+dashboard browser.get https://example.com/login --ask --agent --script '
+my $response = $page->goto("https://example.com/billing", { waitUntil => "networkidle" });
+return { url => $page->url(), title => $page->title(), status => $response->status() };
+'
+```
+
+44. Visit a page, then a documentation page, then read headings.
+
+```bash
+dashboard browser.get https://example.com --flow --script '
+$page->goto("https://example.com/docs", { waitUntil => "networkidle" });
+my $headings = $page->evaluate(q{return Array.from(document.querySelectorAll("h1,h2")).map(el => el.textContent.trim())});
+return { url => $page->url(), headings => $headings };
+'
+```
+
+45. Search on one page, then follow the first result.
+
+```bash
+dashboard browser.get https://example.com/search --flow --script '
+my $input = $page->select(q{input[type="search"], input[name="q"]});
+$input->fill("browser skill") if $input;
+my $submit = $page->select(q{button[type="submit"]});
+$submit->click() if $submit;
+sleep 2;
+my $href = $page->evaluate(q{return document.querySelector("a")?.href || null});
+$page->goto($href, { waitUntil => "networkidle" }) if $href;
+return { url => $page->url(), title => $page->title() };
+'
+```
+
+46. Open a menu page and then navigate to usage.
+
+```bash
+dashboard browser.get https://example.com/app --flow --script '
+my $menu = $page->select(q{button[aria-label*="Menu"]});
+$menu->click() if $menu;
+sleep 1;
+my $usage = $page->evaluate(q{return document.querySelector("a[href*=\"usage\"]")?.href || null});
+$page->goto($usage, { waitUntil => "networkidle" }) if $usage;
+return { url => $page->url(), title => $page->title() };
+'
+```
+
+47. Go to settings and then scrape the settings page text.
+
+```bash
+dashboard browser.get https://example.com/app --flow --script '
+my $settings = $page->evaluate(q{return document.querySelector("a[href*=\"settings\"]")?.href || null});
+$page->goto($settings, { waitUntil => "networkidle" }) if $settings;
+my $text = $page->evaluate(q{return document.body.innerText});
+return { url => $page->url(), text => $text };
+'
+```
+
+48. Multi-step form flow across pages.
+
+```bash
+dashboard browser.get https://example.com/step-1 --flow --script '
+my $next = $page->select(q{button[type="submit"], a[href*="step-2"]});
+$next->click() if $next;
+sleep 1;
+$page->goto("https://example.com/step-2", { waitUntil => "networkidle" });
+return { url => $page->url(), title => $page->title() };
+'
+```
+
+49. Start on a public page, then navigate into an admin page and read table data.
+
+```bash
+dashboard browser.get https://example.com/public --flow --script '
+$page->goto("https://example.com/admin", { waitUntil => "networkidle" });
+my $rows = $page->evaluate(q{return Array.from(document.querySelectorAll("table tr")).map(tr => tr.innerText.trim())});
+return { url => $page->url(), rows => $rows };
+'
+```
+
+50. Ollama-style pattern: manual sign-in, then move to a usage-like page and inspect text.
+
+```bash
+dashboard browser.get https://ollama.com/signin --ask --playwright --script '
+my $href = $page->evaluate(q{
+  const link = Array.from(document.querySelectorAll("a")).find(a =>
+    (a.href || "").includes("usage") ||
+    (a.href || "").includes("billing") ||
+    (a.href || "").includes("account")
+  );
+  return link ? link.href : null;
+});
+die "Could not find account-like page after login\n" if !$href;
+$page->goto($href, { waitUntil => "networkidle" });
+my $usage = $page->evaluate(q{return document.querySelector("main")?.innerText || document.body.innerText});
+return { url => $page->url(), title => $page->title(), usage => $usage };
+'
 ```
 
 ## Edge Cases
 
-- if the skill is not installed, DD will not dispatch `browser.get` or `browser.post`
-- if Playwright or node dependencies are missing, the command fails until skill dependencies are installed
-- if the target host is unavailable, the Playwright run exits non-zero
-- if a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect
-- if the Node runtime has not been installed from `package.json` yet, the first command run may take longer while it runs the same `npm install --prefix "$HOME" <skill-root>` flow DD uses
-- if the page is large, `browser.get` returns the full rendered HTML body and the JSON payload can become large
-- if a site responds with a CAPTCHA or challenge page, `is_captcha` is set to true and `body_text` gives a readable summary of the challenge content
-- if `--ask` or `--askme` is used, the command opens a visible browser and waits for you to press Enter in the terminal before it captures the final payload
-- if `--ask` or `--askme` is used, the initial page load defaults to no timeout; use `--timeout-ms` if you want a bounded wait
-- if `--ask` or `--askme` is used in an environment without a display server, the visible browser launch can fail until the command is run on a host with a desktop session
-- if `--jquery` is used, the skill injects its locally installed jQuery runtime into the page before your script runs
-- if `--playwright`, `--agent`, or `--flow` is used, `--script` is treated as a Perl Playwright control script instead of page-context JavaScript
-- if controller mode navigates to another page, the final payload reflects the current page state after the flow
+1. If the skill is not installed, DD will not dispatch `browser.get` or `browser.post`.
+2. If Playwright or Node dependencies are missing, the command fails until DD installs the skill dependencies.
+3. If the target host is unavailable, the Playwright run exits non-zero.
+4. If the page is large, `browser.get` returns a large JSON payload because it includes the rendered HTML body.
+5. If the response looks like a challenge page, `is_captcha` is set to true and `body_text` provides a readable summary.
+6. If a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect.
+7. If `--ask` or `--askme` is used, the command opens a visible browser and waits for terminal confirmation before continuing.
+8. If `--ask` is used, the initial navigation defaults to `load` with no timeout; add `--timeout-ms` if you want a bounded initial wait.
+9. If `--ask` is used on a host without a display server, the headed browser launch can fail until the command runs in a desktop-capable environment.
+10. If `--jquery` is used, it only helps page-side JavaScript or `$page->evaluate(...)` calls, not Perl itself.
+11. If controller mode is used, write the script in single quotes so the shell does not consume Perl variables like `$page`.
+12. If a selector guess is wrong, the controller script can die on `undef`; use defensive selection and inspection patterns first.
+13. If a target site keeps long-lived network activity open, avoid forcing `networkidle` where a simple `load` or explicit sleep is enough.
+14. If a site needs several intermediate clicks before the real destination appears, inspect controls first rather than guessing the final selector.
+15. If the first page after login differs by account state, build the script to detect candidate destinations dynamically.
 
 ## Documentation
 
@@ -198,3 +598,4 @@ See:
 - `docs/changes/2026-04-21-browser-gating.md`
 - `docs/changes/2026-04-22-controller-mode.md`
 - `docs/changes/2026-04-22-ask-timeout.md`
+- `docs/changes/2026-04-22-example-library.md`

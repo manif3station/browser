@@ -49,6 +49,7 @@ cover -report text
 - ask-mode plus controller-mode compatibility is covered in the runner unit suite because the shared Docker test container does not provide a desktop display server for headed browser launches
 - ask-mode now uses `waitUntil => "load"` with no default timeout for the initial navigation so slow login pages can stay open for manual work
 - `--timeout-ms` still overrides the initial ask-mode navigation timeout when the caller wants a bounded wait
+- the README now includes explicit JavaScript versus Perl controller guidance and a large practical example library for normal and edge cases
 
 ## Cleanup
 

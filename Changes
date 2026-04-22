@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.09 2026-04-22
+ - expand the README with explicit JavaScript versus Perl controller guidance
+ - document when `--jquery` is useful and how to mix Perl control with page-side JavaScript
+ - add a large example library covering one-page tasks, multi-page flows, normal cases, and edge cases
+
 0.08 2026-04-22
  - change ask-mode initial navigation to use `load` instead of `networkidle`
  - disable the initial ask-mode timeout by default so slow login pages stay open for manual work
