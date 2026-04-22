@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.11 2026-04-22
+ - add `--wait-until` so callers can choose `networkidle`, `load`, or `domcontentloaded`
+ - remove unproven documentation examples and keep only verified examples in the README
+ - update public-site examples so Amazon uses `--wait-until load` where appropriate
+
 0.10 2026-04-22
  - add 20 Amazon-focused examples covering search, account, cart, and product-page patterns
  - add 20 X-focused examples covering logged-out shell inspection, login, post viewing, and multi-page flows

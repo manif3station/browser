@@ -20,3 +20,4 @@ Add a reusable DD skill that lets a user drive browser-backed GET and POST tasks
 - `DD-026` Expand browser mode-selection and example documentation
 - `DD-027` Add Amazon-focused browser examples
 - `DD-028` Add X-focused browser examples
+- `DD-029` Enforce a proven-only example policy

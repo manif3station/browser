@@ -137,8 +137,11 @@ sub _run_get {
 
 sub _goto_options {
     my (%args) = @_;
+    my $wait_until = $args{wait_until} || ( $args{interactive} ? 'load' : 'networkidle' );
+    die "Unsupported wait-until mode: $wait_until"
+      if $wait_until ne 'load' && $wait_until ne 'domcontentloaded' && $wait_until ne 'networkidle';
     my %options = (
-        waitUntil => $args{interactive} ? 'load' : 'networkidle',
+        waitUntil => $wait_until,
     );
     if ( defined $args{timeout_ms} ) {
         $options{timeout} = $args{timeout_ms};

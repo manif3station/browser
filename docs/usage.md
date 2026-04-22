@@ -9,8 +9,10 @@ dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
 dashboard browser.get https://example.com --ask
 dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
-dashboard browser.get https://example.com --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+dashboard browser.get https://example.com --flow --script 'my $response = $page->goto("https://www.iana.org/domains/example", { waitUntil => "load" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 dashboard browser.get https://example.com/login --ask --timeout-ms 120000
+dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return document.title'
+dashboard browser.get https://x.com --wait-until load --script 'return document.title'
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
 ```
@@ -63,6 +65,8 @@ Use JavaScript mode when you want to inspect the current page only.
 
 Use Perl controller mode when you need to click, fill, navigate, log in, or continue across pages.
 
+Use `--wait-until load` or `--wait-until domcontentloaded` when a public site never settles into a useful `networkidle` state.
+
 ## Controller Mode
 
 `--playwright`, `--agent`, and `--flow` are equivalent flags. Any of them switches `--script` from page-context JavaScript into a Perl Playwright controller script.
@@ -91,6 +95,21 @@ dashboard browser.get https://example.com/login --playwright --script 'my $email
 ```
 
 The final JSON payload is captured after the controller script finishes, so `final_url`, `title`, `body`, and `body_text` reflect the current page at the end of the flow.
+
+## Wait Modes
+
+The skill supports:
+
+- `--wait-until networkidle`
+- `--wait-until load`
+- `--wait-until domcontentloaded`
+
+If not set:
+
+- normal non-interactive GET runs default to `networkidle`
+- ask-mode GET runs default to `load`
+
+For sites like Amazon, `--wait-until load` is often the safer documented choice.
 
 ## jQuery Mode
 
@@ -142,15 +161,11 @@ dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 
 The full example library is kept in `README.md` and includes:
 
-- JavaScript extraction examples
-- jQuery extraction examples
-- one-page Perl controller examples
-- multi-page Perl flow examples
-- normal cases and edge cases
-- Amazon-focused examples
-- X-focused examples
+- fixture-verified examples
+- live-verified Amazon examples
+- live-verified X examples
 
-The Amazon examples are based on stable public Amazon navigation and search selectors, while the X examples are aligned to a live logged-out shell fetch from `x.com`.
+Only the remaining examples in `README.md` are treated as proven examples.
 
 ## Captcha Detection
 

@@ -597,6 +597,10 @@ is( Browser::Runner::_page_text( FakePage->new( { body_text => "Hello\n" } ) ), 
 is_deeply( Browser::Runner::_goto_options(), { waitUntil => 'networkidle' }, 'goto_options defaults to networkidle for non-interactive runs' );
 is_deeply( Browser::Runner::_goto_options( interactive => 1 ), { waitUntil => 'load', timeout => 0 }, 'goto_options defaults interactive runs to load with no timeout' );
 is_deeply( Browser::Runner::_goto_options( interactive => 1, timeout_ms => 120000 ), { waitUntil => 'load', timeout => 120000 }, 'goto_options keeps explicit timeout overrides' );
+is_deeply( Browser::Runner::_goto_options( wait_until => 'load' ), { waitUntil => 'load' }, 'goto_options accepts explicit load mode' );
+is_deeply( Browser::Runner::_goto_options( wait_until => 'domcontentloaded' ), { waitUntil => 'domcontentloaded' }, 'goto_options accepts explicit domcontentloaded mode' );
+eval { Browser::Runner::_goto_options( wait_until => 'invalid' ) };
+like( $@, qr/Unsupported wait-until mode/, 'goto_options rejects unsupported wait-until modes' );
 {
     my $temp_root = tempdir( CLEANUP => 1 );
     make_path( File::Spec->catdir( $temp_root, 'node_modules', 'jquery', 'dist' ) );

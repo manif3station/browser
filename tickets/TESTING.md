@@ -53,6 +53,15 @@ cover -report text
 - the README now includes platform-specific example sets for Amazon and X
 - live X shell markup was fetched successfully for selector alignment
 - live Amazon homepage rendering from the verification environment returned a non-HTML `202` path, so the Amazon examples are based on stable public Amazon navigation and search selectors rather than a full verified live render from this environment
+- `--wait-until` now supports `networkidle`, `load`, and `domcontentloaded`
+- unproven README examples were removed; the remaining examples were either verified against the fixture/test environment or manually verified against live targets during this ticket
+- manual live checks confirmed these public examples in the verification environment:
+  - `https://example.com` title and `h1`
+  - `https://example.com` with jQuery `h1` extraction
+  - `https://example.com` controller jump to `https://www.iana.org/domains/example`
+  - `https://www.amazon.com/s?k=desk+lamp` with `--wait-until load`
+  - `https://x.com` with `--wait-until load`
+  - `https://x.com/jack/status/20` with `--wait-until load`
 
 ## Cleanup
 

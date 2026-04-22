@@ -47,6 +47,7 @@ sub execute {
         'headless!'    => \$options{headless},
         'ask!'         => \$options{ask},
         'askme!'       => \$options{askme},
+        'wait-until=s' => \$options{wait_until},
         'timeout-ms=i' => \$options{timeout_ms},
     ) or die "Invalid options";
 
@@ -68,6 +69,7 @@ sub execute {
         browser     => $options{browser},
         headless    => $options{headless},
         interactive => $interactive,
+        wait_until  => $options{wait_until},
         timeout_ms  => $options{timeout_ms},
         input_fh    => $args{input_fh} || \*STDIN,
         prompt_fh   => $args{error_fh} || \*STDERR,

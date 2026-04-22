@@ -26,6 +26,7 @@ use Browser::CLI;
             browser       => $args{browser},
             headless      => $args{headless},
             interactive   => $args{interactive},
+            wait_until    => $args{wait_until},
             timeout_ms    => $args{timeout_ms},
         };
     }
@@ -43,6 +44,7 @@ is( $result->{script_result}, 'return document.title', 'execute forwards the scr
 is( $result->{browser}, 'chrome', 'execute forwards the browser type' );
 is( $result->{headless}, 0, 'execute forwards headless option' );
 is( $result->{timeout_ms}, 5000, 'execute forwards timeout option' );
+is( $result->{wait_until}, undef, 'execute leaves wait-until unset by default' );
 
 my $interactive_result = Browser::CLI::execute(
     method => 'GET',
@@ -87,6 +89,13 @@ $interactive_result = Browser::CLI::execute(
     runner => TestRunner->new(),
 );
 is( $interactive_result->{controller}, 1, 'execute enables controller mode for --flow' );
+
+$interactive_result = Browser::CLI::execute(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--wait-until', 'load' ],
+    runner => TestRunner->new(),
+);
+is( $interactive_result->{wait_until}, 'load', 'execute forwards wait-until' );
 
 my $stdout = q{};
 open my $stdout_fh, '>', \$stdout or die "Unable to open stdout scalar: $!";
@@ -155,6 +164,21 @@ $exit = Browser::CLI::main(
 is( $exit, 0, 'main accepts controller mode arguments' );
 $payload = decode_json($stdout);
 is( $payload->{controller}, 1, 'main prints controller mode in the runner result' );
+
+$stdout = q{};
+$stderr = q{};
+open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for wait-until mode: $!";
+open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for wait-until mode: $!";
+$exit = Browser::CLI::main(
+    method    => 'GET',
+    argv      => [ 'https://example.test', '--wait-until', 'domcontentloaded' ],
+    runner    => TestRunner->new(),
+    output_fh => $stdout_fh,
+    error_fh  => $stderr_fh,
+);
+is( $exit, 0, 'main accepts wait-until arguments' );
+$payload = decode_json($stdout);
+is( $payload->{wait_until}, 'domcontentloaded', 'main prints wait-until in the runner result' );
 
 $stdout = q{};
 $stderr = q{};
