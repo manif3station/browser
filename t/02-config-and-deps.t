@@ -40,6 +40,7 @@ my $package_json = do {
 };
 like( $package_json, qr/"playwright"\s*:/, 'package.json includes playwright' );
 like( $package_json, qr/"express"\s*:/, 'package.json includes express' );
+like( $package_json, qr/"jquery"\s*:/, 'package.json includes jquery' );
 like( $package_json, qr/"uuid"\s*:/, 'package.json includes uuid' );
 
 my %launch = Browser::Runner::_launch_options(

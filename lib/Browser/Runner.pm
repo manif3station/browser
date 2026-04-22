@@ -107,6 +107,7 @@ sub _run_get {
     my ( $page, %args ) = @_;
     my $response = $page->goto( $args{url}, { waitUntil => 'networkidle' } );
     _await_user(%args) if $args{interactive};
+    _maybe_inject_jquery( $page, %args );
     my $headers = $response ? ( $response->headers() || {} ) : {};
     my $body = $page->content();
     my $body_text = _page_text($page);
@@ -156,6 +157,7 @@ sub _run_post {
             body   => $body,
         }
     ) . '; return true;' );
+    _maybe_inject_jquery( $page, %args );
 
     my $result = {
         method        => 'POST',
@@ -182,6 +184,21 @@ sub _await_user {
     print {$prompt_fh} "Browser is open for interactive work. Complete the captcha or login flow, then press Enter to continue.\n";
     scalar <$input_fh>;
     return 1;
+}
+
+sub _maybe_inject_jquery {
+    my ( $page, %args ) = @_;
+    return 0 if !$args{jquery};
+    my $path = _jquery_path();
+    $page->addScriptTag( { path => $path } );
+    return 1;
+}
+
+sub _jquery_path {
+    my $home_root = $ENV{HOME} || die 'HOME is required for browser skill jQuery injection';
+    my $path = File::Spec->catfile( $home_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' );
+    die "Missing jQuery runtime at $path" if !-f $path;
+    return $path;
 }
 
 sub _page_text {

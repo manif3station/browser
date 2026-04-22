@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.06 2026-04-22
+ - add `--jquery` to inject the local jQuery runtime into the page before script evaluation
+ - document that Playwright itself does not provide jQuery unless the page already loaded it
+ - update tests and docs for jQuery-enabled scripts
+
 0.05 2026-04-22
  - add `--ask` and `--askme` to browser.get for visible interactive takeover
  - wait for terminal confirmation before capturing the final page payload after captcha or login work

@@ -20,6 +20,7 @@ use Browser::CLI;
             final_url     => $args{url},
             status        => 200,
             script_result => $args{script},
+            jquery        => $args{jquery},
             data          => $args{data},
             browser       => $args{browser},
             headless      => $args{headless},
@@ -58,6 +59,13 @@ $interactive_result = Browser::CLI::execute(
 is( $interactive_result->{interactive}, 1, 'execute enables interactive mode for --askme' );
 is( $interactive_result->{headless}, 0, 'execute forces headed mode for --askme' );
 
+$interactive_result = Browser::CLI::execute(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--jquery' ],
+    runner => TestRunner->new(),
+);
+is( $interactive_result->{jquery}, 1, 'execute forwards the jquery flag' );
+
 my $stdout = q{};
 open my $stdout_fh, '>', \$stdout or die "Unable to open stdout scalar: $!";
 my $stderr = q{};
@@ -95,6 +103,21 @@ $exit = Browser::CLI::main(
 is( $exit, 0, 'main accepts ask-mode arguments' );
 $payload = decode_json($stdout);
 is( $payload->{interactive}, 1, 'main prints interactive mode in the runner result' );
+
+$stdout = q{};
+$stderr = q{};
+open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for jquery mode: $!";
+open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for jquery mode: $!";
+$exit = Browser::CLI::main(
+    method    => 'GET',
+    argv      => [ 'https://example.test', '--jquery' ],
+    runner    => TestRunner->new(),
+    output_fh => $stdout_fh,
+    error_fh  => $stderr_fh,
+);
+is( $exit, 0, 'main accepts jquery mode arguments' );
+$payload = decode_json($stdout);
+is( $payload->{jquery}, 1, 'main prints jquery mode in the runner result' );
 
 $stdout = q{};
 $stderr = q{};

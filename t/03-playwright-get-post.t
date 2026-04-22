@@ -37,6 +37,12 @@ eval {
     ok( !$get_payload->{is_captcha}, 'browser.get does not mark normal pages as captcha pages' );
     is( $get_payload->{script_result}{heading}, 'Browser Skill', 'browser.get evaluates Playwright script against the DOM' );
 
+    my $jquery_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/get --jquery --script 'return typeof window.jQuery === "function" ? window.jQuery("h1").first().text() : null' 2>&1};
+    my $jquery_exit = $? >> 8;
+    is( $jquery_exit, 0, "browser.get injects jquery when requested\n$jquery_output" );
+    my $jquery_payload = decode_json($jquery_output);
+    is( $jquery_payload->{script_result}, 'Browser Skill', 'browser.get scripts can use injected jQuery' );
+
     my $captcha_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/captcha 2>&1};
     my $captcha_exit = $? >> 8;
     is( $captcha_exit, 0, "browser.get handles captcha-like pages\n$captcha_output" );

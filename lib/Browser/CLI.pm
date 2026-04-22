@@ -38,6 +38,7 @@ sub execute {
     GetOptionsFromArray(
         \@argv,
         'script=s'     => \$options{script},
+        'jquery!'      => \$options{jquery},
         'data=s'       => \$options{data},
         'browser=s'    => \$options{browser},
         'headless!'    => \$options{headless},
@@ -57,6 +58,7 @@ sub execute {
         method      => $method,
         url         => $url,
         script      => $options{script},
+        jquery      => $options{jquery},
         data        => $options{data},
         browser     => $options{browser},
         headless    => $options{headless},

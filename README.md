@@ -28,6 +28,7 @@ Without a shared skill, quick browser-driven automation often ends up split acro
 - HTML page body output for `browser.get`
 - text extraction, content type reporting, and captcha detection for browser responses
 - interactive visible-browser takeover through `--ask` and `--askme`
+- optional jQuery injection through `--jquery`
 - optional `--script` evaluation through the Playwright Perl module
 - optional `--data` for `browser.post`
 - DD dependency files so the skill can install its Perl and system prerequisites
@@ -84,6 +85,7 @@ Installed DD usage:
 dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
 dashboard browser.get https://example.com --ask
+dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard'
 dashboard browser.post https://example.com/form --script 'return window.__BROWSER_POST__.status'
@@ -129,6 +131,12 @@ dashboard browser.get 'https://www.google.com/search?q=developer+dashboard' --as
 
 `--askme` is accepted as the same interaction mode.
 
+Normal case, inject jQuery so the script can use `$()` selectors:
+
+```bash
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
+```
+
 Normal case, inspect a heading:
 
 ```bash
@@ -157,6 +165,7 @@ dashboard skills uninstall browser
 - if the page is large, `browser.get` returns the full rendered HTML body and the JSON payload can become large
 - if a site responds with a CAPTCHA or challenge page, `is_captcha` is set to true and `body_text` gives a readable summary of the challenge content
 - if `--ask` or `--askme` is used, the command opens a visible browser and waits for you to press Enter in the terminal before it captures the final payload
+- if `--jquery` is used, the skill injects its locally installed jQuery runtime into the page before your script runs
 
 ## Documentation
 

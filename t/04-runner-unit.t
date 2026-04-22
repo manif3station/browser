@@ -46,6 +46,7 @@ use Browser::Runner;
     sub url { $_[0]{url} }
     sub title { $_[0]{title} }
     sub content { $_[0]{content} }
+    sub addScriptTag { push @{ $_[0]{script_tags} }, $_[1]; return 1 }
     sub evaluate {
         push @{ $_[0]{evaluations} }, $_[1];
         return $_[0]{body_text} if $_[1] =~ /document\.body \? document\.body\.innerText/;
@@ -141,6 +142,41 @@ my $interactive_get = $interactive_runner->request(
 is( $interactive_get->{title}, 'Login', 'interactive GET still returns the page payload after user takeover' );
 like( $prompt, qr/Complete the captcha or login flow/, 'interactive GET prompts the user before payload capture continues' );
 is( $interactive_playwright->{launch_args}{headless}, 0, 'interactive GET launches a visible browser' );
+
+my $jquery_page = FakePage->new(
+    {
+        response        => FakeResponse->new( { status => 200, headers => { 'content-type' => 'text/html; charset=utf-8' } } ),
+        url             => 'https://example.test/jquery',
+        title           => 'jQuery',
+        content         => '<html><body><h1>jQuery</h1></body></html>',
+        body_text       => "jQuery\n",
+        evaluate_return => 'jquery-result',
+    }
+);
+my $jquery_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $jquery_page } ),
+    }
+);
+my $jquery_runner = Browser::Runner->new(
+    playwright_factory => sub { return $jquery_playwright },
+);
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'jquery', 'dist' ) );
+    open my $jquery_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ) or die "Unable to write temp jquery runtime: $!";
+    print {$jquery_fh} "window.\$ = function(){ return { first: function(){ return { text: function(){ return 'Browser Skill'; } }; } }; };\n";
+    close $jquery_fh or die "Unable to close temp jquery runtime: $!";
+    local $ENV{HOME} = $temp_root;
+    my $jquery_result = $jquery_runner->request(
+        method => 'GET',
+        url    => 'https://example.test/jquery',
+        script => 'return $("h1").first().text()',
+        jquery => 1,
+    );
+    is( $jquery_result->{script_result}, 'jquery-result', 'GET payload still returns the script result after jQuery injection' );
+    is( $jquery_page->{script_tags}[0]{path}, File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ), 'GET injects the local jquery runtime before running the script' );
+}
 
 {
     my $auto_page = FakePage->new(
@@ -370,6 +406,33 @@ is( $command_exit, 0, '_run_command returns zero for a successful command' );
 ok( Browser::Runner::_is_captcha_page( title => 'Captcha Check', body => '<script src=\"recaptcha\"></script>', body_text => 'unusual traffic' ), 'captcha helper detects captcha-like pages' );
 ok( !Browser::Runner::_is_captcha_page( title => 'Normal', body => '<html>ok</html>', body_text => 'hello world' ), 'captcha helper ignores normal pages' );
 is( Browser::Runner::_page_text( FakePage->new( { body_text => "Hello\n" } ) ), "Hello\n", 'page_text extracts body text through the page helper' );
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'jquery', 'dist' ) );
+    open my $jquery_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ) or die "Unable to write temp jquery runtime path test: $!";
+    print {$jquery_fh} "/* jquery */\n";
+    close $jquery_fh or die "Unable to close temp jquery runtime path test: $!";
+    local $ENV{HOME} = $temp_root;
+    is( Browser::Runner::_jquery_path(), File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ), 'jquery_path resolves the local jquery runtime' );
+}
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    local $ENV{HOME} = $temp_root;
+    eval { Browser::Runner::_jquery_path() };
+    like( $@, qr/Missing jQuery runtime/, 'jquery_path fails clearly when jquery is not installed' );
+}
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'jquery', 'dist' ) );
+    open my $jquery_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ) or die "Unable to write temp jquery runtime for helper: $!";
+    print {$jquery_fh} "/* jquery */\n";
+    close $jquery_fh or die "Unable to close temp jquery runtime for helper: $!";
+    local $ENV{HOME} = $temp_root;
+    my $page = FakePage->new( {} );
+    ok( Browser::Runner::_maybe_inject_jquery( $page, jquery => 1 ), 'maybe_inject_jquery injects jquery when requested' );
+    is( $page->{script_tags}[0]{path}, File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ), 'maybe_inject_jquery uses the jquery runtime path' );
+    is( Browser::Runner::_maybe_inject_jquery( $page ), 0, 'maybe_inject_jquery is a no-op when jquery mode is off' );
+}
 my $await_prompt = q{};
 open my $await_prompt_fh, '>', \$await_prompt or die "Unable to open await prompt scalar: $!";
 my $await_input = "\n";

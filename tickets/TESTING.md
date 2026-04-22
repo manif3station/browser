@@ -43,6 +43,7 @@ cover -report text
 - `browser.get` returns the rendered HTML body in its JSON payload
 - browser responses include `content_type`, `body_text`, and `is_captcha`
 - `browser.get` supports `--ask` and `--askme` for visible interactive takeover
+- browser scripts can opt into injected jQuery with `--jquery`
 
 ## Cleanup
 

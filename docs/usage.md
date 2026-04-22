@@ -8,6 +8,7 @@ Installed DD usage:
 dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
 dashboard browser.get https://example.com --ask
+dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
 ```
@@ -55,6 +56,18 @@ dashboard browser.post https://example.com/form --data "name=dd" --script 'retur
 ```
 
 For `browser.post`, the skill loads the response content into a page before evaluating the script. It also exposes response metadata through `window.__BROWSER_POST__`.
+
+## jQuery Mode
+
+Playwright does not automatically provide jQuery in the page context.
+
+`--jquery` tells the skill to inject its locally installed jQuery runtime into the page before your script runs. That gives your script access to `window.$` and `window.jQuery` even when the target page did not load jQuery itself.
+
+Example:
+
+```bash
+dashboard browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
+```
 
 ## Interactive Mode
 
