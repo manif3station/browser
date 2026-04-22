@@ -65,7 +65,9 @@ Example:
 dashboard skills install git@github.mf:manif3station/browser.git
 ```
 
-For direct local development, prepare the Node-side runtime with:
+Developer Dashboard installs the skill's `package.json` runtime into `$HOME` using the DD Node dependency path. The skill also verifies that installed module versions still satisfy `package.json`, and if they do not, it stages a fresh `npx --yes npm install ...` under the DD cache and replaces the stale module trees before launching Playwright.
+
+For direct local development outside DD, you can preinstall the Node-side runtime with:
 
 ```bash
 npm install --prefix "$HOME" .
@@ -152,7 +154,7 @@ The examples below are the ones I am prepared to stand behind. They were verifie
 - against the deterministic browser fixture used in the automated test suite
 - or against live public pages that returned working JSON from the skill in the current verification environment
 
-Examples that I could not verify have been removed instead of being left as optimistic templates.
+The rule for this skill is to prove, fix, and document examples in their working form rather than leave optimistic templates behind.
 
 ### Verified Core Examples
 

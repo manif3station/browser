@@ -42,6 +42,8 @@ The skill declares its Node-side dependencies in `package.json`, matching the DD
 npm install --prefix "$HOME" <skill-root>
 ```
 
+The skill also checks that the installed `$HOME/node_modules` versions still satisfy `package.json`. If the installed tree is stale or mismatched, it stages a fresh `npx --yes npm install ...` in the DD cache and replaces the affected module directories before launching Playwright.
+
 For direct local development outside DD, use:
 
 ```bash
@@ -184,7 +186,9 @@ This is intended as a practical CLI signal, not a perfect classifier.
 - if Playwright dependencies are missing, the command will fail until DD installs the skill dependencies
 - if the target URL cannot be reached, Playwright raises an error and the command exits non-zero
 - if a POST response is not HTML, the skill wraps the body in a simple HTML document so a DOM-based script can still inspect it
-- if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill installs `playwright`, `express`, and `uuid` into `$HOME/node_modules`
+- if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill stages and installs `playwright`, `express`, `jquery`, and `uuid` into `$HOME/node_modules`
+- if `$HOME/node_modules` contains stale module trees from an older install, the skill clears the affected package directories and reinstalls them from the current `package.json`
+- if `CHROMIUM_BIN` is not set, the skill looks for a usable system Chromium or Chrome binary on `PATH`
 - if the page HTML is large, `browser.get` returns that full HTML in the JSON payload
 - if `--ask` or `--askme` is used on a host without a display server, the headed browser launch can fail until the command is run in a desktop-capable environment
 - if a login page keeps long-lived background requests open, ask-mode avoids `networkidle` on the initial load so the browser session can stay open for manual work

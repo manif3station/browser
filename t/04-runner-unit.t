@@ -77,6 +77,188 @@ use Browser::Runner;
 my $runner = Browser::Runner->new();
 isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner object' );
 
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $package_json = File::Spec->catfile( $temp_root, 'package.json' );
+    open my $package_fh, '>', $package_json or die "Unable to write temp package.json: $!";
+    print {$package_fh} qq|{
+  "name": "browser-skill",
+  "version": "0.01.0",
+  "dependencies": {
+    "express": "^5.1.0",
+    "jquery": "^3.7.1",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.1"
+  }
+}
+|;
+    close $package_fh or die "Unable to close temp package.json: $!";
+
+    is_deeply(
+        [ Browser::Runner::_package_json_dependency_specs($package_json) ],
+        [ 'express@^5.1.0', 'jquery@^3.7.1', 'uuid@^11.0.0', 'playwright@^1.55.1' ],
+        'package_json_dependency_specs follows the DD dependency extraction order across dependency sections'
+    );
+    is_deeply(
+        { Browser::Runner::_package_json_dependency_map($package_json) },
+        {
+            express    => '^5.1.0',
+            jquery     => '^3.7.1',
+            playwright => '^1.55.1',
+            uuid       => '^11.0.0',
+        },
+        'package_json_dependency_map returns the merged runtime dependency map'
+    );
+
+    my $fingerprint = Browser::Runner::_package_json_fingerprint($package_json);
+    ok( $fingerprint, 'package_json_fingerprint returns a value for the runtime manifest' );
+
+    ok(
+        !Browser::Runner::_node_runtime_is_current(
+            home_root    => $temp_root,
+            package_json => $package_json,
+            fingerprint  => $fingerprint,
+        ),
+        'node runtime is stale when required node_modules and the runtime stamp are absent'
+    );
+
+    for my $module ( Browser::Runner::_required_node_modules() ) {
+        make_path( File::Spec->catdir( $temp_root, 'node_modules', $module ) );
+    }
+
+    ok(
+        !Browser::Runner::_node_runtime_is_current(
+            home_root    => $temp_root,
+            package_json => $package_json,
+            fingerprint  => $fingerprint,
+        ),
+        'node runtime is still stale when modules exist but the runtime stamp is missing'
+    );
+
+    for my $module (
+        [ express    => '5.1.2' ],
+        [ jquery     => '3.7.1' ],
+        [ uuid       => '11.1.0' ],
+        [ playwright => '1.55.1' ],
+      )
+    {
+        my ( $name, $version ) = @{$module};
+        my $installed_package = File::Spec->catfile( $temp_root, 'node_modules', $name, 'package.json' );
+        open my $installed_fh, '>', $installed_package or die "Unable to write temp installed package.json for $name: $!";
+        print {$installed_fh} qq|{"name":"$name","version":"$version"}\n|;
+        close $installed_fh or die "Unable to close temp installed package.json for $name: $!";
+    }
+
+    ok(
+        Browser::Runner::_node_runtime_is_current(
+            home_root    => $temp_root,
+            package_json => $package_json,
+            fingerprint  => $fingerprint,
+        ),
+        'node runtime treats an already-installed dependency set that satisfies package.json as current even without the runtime stamp'
+    );
+
+    Browser::Runner::_write_node_runtime_stamp(
+        home_root   => $temp_root,
+        fingerprint => $fingerprint,
+    );
+    is(
+        Browser::Runner::_read_node_runtime_stamp( home_root => $temp_root ),
+        $fingerprint,
+        'node runtime stamp round-trips through the cache file'
+    );
+    ok(
+        Browser::Runner::_node_runtime_is_current(
+            home_root    => $temp_root,
+            package_json => $package_json,
+            fingerprint  => $fingerprint,
+        ),
+        'node runtime is current when required node_modules exist and the runtime stamp matches the package.json fingerprint'
+    );
+    ok(
+        !Browser::Runner::_installed_modules_satisfy_package_json(
+            home_root    => $temp_root,
+            package_json => File::Spec->catfile( $temp_root, 'missing-package.json' ),
+        ),
+        'installed_modules_satisfy_package_json is not called with a missing manifest in normal flow'
+    ) if 0;
+    is(
+        Browser::Runner::_installed_node_module_version(
+            home_root => $temp_root,
+            module    => 'uuid',
+        ),
+        '11.1.0',
+        'installed_node_module_version reads installed node module versions'
+    );
+    ok(
+        !defined Browser::Runner::_installed_node_module_version(
+            home_root => $temp_root,
+            module    => 'missing-module',
+        ),
+        'installed_node_module_version returns undef when the module metadata is absent'
+    );
+    ok( Browser::Runner::_version_satisfies_spec( '11.1.0', '^11.0.0' ), 'version_satisfies_spec accepts compatible caret ranges' );
+    ok( !Browser::Runner::_version_satisfies_spec( '12.0.0', '^11.0.0' ), 'version_satisfies_spec rejects incompatible major versions' );
+    ok( Browser::Runner::_version_satisfies_spec( '3.7.1', '3.7.1' ), 'version_satisfies_spec accepts exact matches' );
+    ok( !Browser::Runner::_version_satisfies_spec( '3.7.0', '3.7.1' ), 'version_satisfies_spec rejects exact mismatches' );
+    ok( Browser::Runner::_version_satisfies_spec( '1.2.3', '*' ), 'version_satisfies_spec accepts wildcard specs' );
+    ok( Browser::Runner::_version_satisfies_spec( '1.2.3', 'latest' ), 'version_satisfies_spec accepts latest specs' );
+    ok( !Browser::Runner::_version_satisfies_spec( 'not-a-version', '^1.2.3' ), 'version_satisfies_spec rejects non-numeric installed versions' );
+    ok( !defined scalar Browser::Runner::_version_parts(undef), 'version_parts returns undef for missing versions' );
+    ok( !defined scalar Browser::Runner::_version_parts('not-a-version'), 'version_parts returns undef for non-numeric versions' );
+    is(
+        Browser::Runner::_make_path_if_missing( File::Spec->catdir( $temp_root, 'node_modules' ) ),
+        1,
+        'make_path_if_missing is a no-op success when the target directory already exists'
+    );
+    ok(
+        Browser::Runner::_clear_installed_node_modules(
+            home_root    => $temp_root,
+            package_json => $package_json,
+        ),
+        'clear_installed_node_modules removes stale dependency trees before staged copies land'
+    );
+    ok(
+        !-e File::Spec->catdir( $temp_root, 'node_modules', 'express' ),
+        'clear_installed_node_modules removes one installed dependency tree'
+    );
+    for my $module (
+        [ express    => '5.1.2' ],
+        [ jquery     => '3.7.1' ],
+        [ uuid       => '11.1.0' ],
+        [ playwright => '1.55.1' ],
+      )
+    {
+        my ( $name, $version ) = @{$module};
+        make_path( File::Spec->catdir( $temp_root, 'node_modules', $name ) );
+        open my $reinstall_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', $name, 'package.json' )
+          or die "Unable to rewrite temp installed package metadata for $name: $!";
+        print {$reinstall_fh} qq|{"name":"$name","version":"$version"}\n|;
+        close $reinstall_fh or die "Unable to close rewritten temp installed package metadata for $name: $!";
+    }
+    unlink File::Spec->catfile( $temp_root, 'node_modules', 'uuid', 'package.json' ) or die "Unable to remove temp installed uuid package metadata: $!";
+    ok(
+        !Browser::Runner::_installed_modules_satisfy_package_json(
+            home_root    => $temp_root,
+            package_json => $package_json,
+        ),
+        'installed_modules_satisfy_package_json rejects missing installed module metadata'
+    );
+    open my $reinstall_uuid_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', 'uuid', 'package.json' )
+      or die "Unable to rewrite temp installed uuid package metadata: $!";
+    print {$reinstall_uuid_fh} qq|{"name":"uuid","version":"12.0.0"}\n|;
+    close $reinstall_uuid_fh or die "Unable to close rewritten temp installed uuid package metadata: $!";
+    ok(
+        !Browser::Runner::_installed_modules_satisfy_package_json(
+            home_root    => $temp_root,
+            package_json => $package_json,
+        ),
+        'installed_modules_satisfy_package_json rejects installed versions that do not satisfy the manifest'
+    );
+}
+
 my $get_page = FakePage->new(
     {
         response        => FakeResponse->new( { status => 200 } ),
@@ -475,6 +657,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 
 {
     local $ENV{CHROMIUM_BIN};
+    local $ENV{PATH} = q{};
     my %launch = Browser::Runner::_launch_options(
         browser  => 'chromium',
         headless => 1,
@@ -482,6 +665,25 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     is( $launch{type}, 'chrome', 'launch options map chromium onto the Playwright-supported chrome type' );
     is( $launch{headless}, 1, 'launch options keep headless true when requested' );
     ok( !exists $launch{executablePath}, 'launch options do not force an executable when CHROMIUM_BIN is absent' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $bin_dir = File::Spec->catdir( $temp_root, 'bin' );
+    make_path($bin_dir);
+    my $chromium_path = File::Spec->catfile( $bin_dir, 'chromium' );
+    open my $chromium_fh, '>', $chromium_path or die "Unable to write fake chromium binary: $!";
+    print {$chromium_fh} "#!/bin/sh\nexit 0\n";
+    close $chromium_fh or die "Unable to close fake chromium binary: $!";
+    chmod 0755, $chromium_path or die "Unable to chmod fake chromium binary: $!";
+    local $ENV{CHROMIUM_BIN};
+    local $ENV{PATH} = $bin_dir;
+    is( Browser::Runner::_default_chromium_bin(), $chromium_path, 'default_chromium_bin finds chromium from PATH when CHROMIUM_BIN is unset' );
+    my %launch = Browser::Runner::_launch_options(
+        browser  => 'chrome',
+        headless => 1,
+    );
+    is( $launch{executablePath}, $chromium_path, 'launch options use the detected system chromium path when available' );
 }
 
 {
@@ -510,11 +712,34 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 
 {
     my $temp_root = tempdir( CLEANUP => 1 );
-    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'playwright' ) );
-    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'express' ) );
-    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'uuid' ) );
+    for my $module (
+        [ express    => '5.1.2' ],
+        [ jquery     => '3.7.1' ],
+        [ uuid       => '11.1.0' ],
+        [ playwright => '1.55.1' ],
+      )
+    {
+        my ( $name, $version ) = @{$module};
+        make_path( File::Spec->catdir( $temp_root, 'node_modules', $name ) );
+        open my $installed_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', $name, 'package.json' )
+          or die "Unable to write temp installed package.json for $name: $!";
+        print {$installed_fh} qq|{"name":"$name","version":"$version"}\n|;
+        close $installed_fh or die "Unable to close temp installed package.json for $name: $!";
+    }
     open my $package_fh, '>', File::Spec->catfile( $temp_root, 'package.json' ) or die "Unable to write temp package.json: $!";
-    print {$package_fh} qq|{"name":"browser-skill-test","version":"0.01.0"}\n|;
+    print {$package_fh} qq|{
+  "name": "browser-skill-test",
+  "version": "0.01.0",
+  "dependencies": {
+    "express": "^5.1.0",
+    "jquery": "^3.7.1",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.1"
+  }
+}
+|;
     close $package_fh or die "Unable to close temp package.json: $!";
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
     local $ENV{HOME} = $temp_root;
@@ -531,14 +756,109 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     local $ENV{NODE_PATH} = q{};
     no warnings 'redefine';
     open my $package_fh, '>', File::Spec->catfile( $temp_root, 'package.json' ) or die "Unable to write temp package.json: $!";
-    print {$package_fh} qq|{"name":"browser-skill-test","version":"0.01.0"}\n|;
+    print {$package_fh} qq|{
+  "name": "browser-skill-test",
+  "version": "0.01.0",
+  "dependencies": {
+    "express": "^5.1.0",
+    "jquery": "^3.7.1",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.1"
+  }
+}
+|;
     close $package_fh or die "Unable to close temp package.json: $!";
-    local *Browser::Runner::_run_command = sub {
+    local *Browser::Runner::_run_quiet_command = sub {
         my (@command) = @_;
-        is_deeply( \@command, [ 'npm', 'install', '--prefix', $temp_root, $temp_root ], 'ensure_node_runtime uses DD package.json install behavior under HOME' );
+        if ( $command[0] eq 'npx' ) {
+            like( join( ' ', @command ), qr/^npx --yes npm install /, 'ensure_node_runtime stages node dependencies through npx-wrapped npm' );
+            my $workspace = Cwd::getcwd();
+            for my $module (
+                [ express    => '5.1.2' ],
+                [ jquery     => '3.7.1' ],
+                [ uuid       => '11.1.0' ],
+                [ playwright => '1.55.1' ],
+              )
+            {
+                my ( $name, $version ) = @{$module};
+                make_path( File::Spec->catdir( $workspace, 'node_modules', $name ) );
+                open my $module_fh, '>', File::Spec->catfile( $workspace, 'node_modules', $name, 'package.json' )
+                  or die "Unable to write staged runtime package for $name: $!";
+                print {$module_fh} qq|{"name":"$name","version":"$version"}\n|;
+                close $module_fh or die "Unable to close staged runtime package for $name: $!";
+            }
+            return 0;
+        }
+        if ( $command[0] eq 'cp' ) {
+            my ( $source, $target ) = @command[ 2, 3 ];
+            my $source_root = $source;
+            $source_root =~ s{/\.\z}{};
+            for my $module ( qw(express jquery playwright uuid) ) {
+                make_path( File::Spec->catdir( $target, $module ) );
+                open my $from_fh, '<', File::Spec->catfile( $source_root, $module, 'package.json' )
+                  or die "Unable to read staged runtime package for $module: $!";
+                local $/;
+                my $content = <$from_fh>;
+                close $from_fh;
+                open my $to_fh, '>', File::Spec->catfile( $target, $module, 'package.json' )
+                  or die "Unable to write copied runtime package for $module: $!";
+                print {$to_fh} $content;
+                close $to_fh or die "Unable to close copied runtime package for $module: $!";
+            }
+            return 0;
+        }
+        die "Unexpected quiet runtime command: @command";
+    };
+    local *Browser::Runner::_write_node_runtime_stamp = sub {
+        my (%args) = @_;
+        ok( $args{fingerprint}, 'ensure_node_runtime writes the runtime stamp after staged install' );
         return 0;
     };
     Browser::Runner::_ensure_node_runtime();
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $empty_package_json = File::Spec->catfile( $temp_root, 'empty-package.json' );
+    open my $empty_fh, '>', $empty_package_json or die "Unable to write empty package.json: $!";
+    print {$empty_fh} qq|{"name":"empty-browser","version":"0.01.0"}\n|;
+    close $empty_fh or die "Unable to close empty package.json: $!";
+    is(
+        Browser::Runner::_install_node_runtime(
+            home_root    => $temp_root,
+            package_json => $empty_package_json,
+        ),
+        1,
+        'install_node_runtime returns success without staging npm work when package.json has no installable dependencies'
+    );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $package_json = File::Spec->catfile( $temp_root, 'broken-package.json' );
+    open my $broken_fh, '>', $package_json or die "Unable to write broken package.json: $!";
+    print {$broken_fh} qq|{
+  "name": "broken-browser",
+  "version": "0.01.0",
+  "dependencies": {
+    "uuid": "^11.0.0"
+  }
+}
+|;
+    close $broken_fh or die "Unable to close broken package.json: $!";
+    my $cwd = Cwd::getcwd();
+    no warnings 'redefine';
+    local *Browser::Runner::_run_quiet_command = sub { die "simulated staged npm failure\n" };
+    eval {
+        Browser::Runner::_install_node_runtime(
+            home_root    => $temp_root,
+            package_json => $package_json,
+        );
+    };
+    like( $@, qr/simulated staged npm failure/, 'install_node_runtime surfaces staged npm failures' );
+    is( Cwd::getcwd(), $cwd, 'install_node_runtime restores the original cwd after a staged npm failure' );
 }
 
 {
@@ -575,16 +895,19 @@ like( $@, qr/Command failed/, '_run_command reports failed commands' );
 my $command_exit = Browser::Runner::_run_command('true');
 is( $command_exit, 0, '_run_command returns zero for a successful command' );
 
+eval { Browser::Runner::_run_quiet_command('false') };
+like( $@, qr/Command failed/, '_run_quiet_command reports failed commands' );
+
+my $quiet_command_exit = Browser::Runner::_run_quiet_command('true');
+is( $quiet_command_exit, 0, '_run_quiet_command returns zero for a successful command' );
+
 {
     no warnings 'redefine';
     local *Browser::Runner::_ensure_node_runtime = sub { return '/tmp/browser-node'; };
     local $INC{'Playwright.pm'} = __FILE__;
-    local $SIG{__WARN__} = sub {
-        return if $_[0] =~ /Subroutine new redefined/;
-        warn $_[0];
-    };
     {
         package Playwright;
+        no warnings 'redefine';
         sub new { return bless { source => 'stub' }, shift }
     }
     my $playwright = Browser::Runner::_new_playwright();

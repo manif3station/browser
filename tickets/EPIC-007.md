@@ -21,3 +21,4 @@ Add a reusable DD skill that lets a user drive browser-backed GET and POST tasks
 - `DD-027` Add Amazon-focused browser examples
 - `DD-028` Add X-focused browser examples
 - `DD-029` Enforce a proven-only example policy
+- `DD-030` Repair the Node runtime bootstrap against stale `$HOME/node_modules` trees and verify it against the latest DD source

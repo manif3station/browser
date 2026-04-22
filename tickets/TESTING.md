@@ -32,6 +32,58 @@ cover -report text
 '
 ```
 
+Latest covered result for the current runtime-repair ticket:
+
+- `lib/Browser/CLI.pm` `100.0%` statement, `100.0%` subroutine
+- `lib/Browser/Runner.pm` `100.0%` statement, `100.0%` subroutine
+
+## Direct Host Proof
+
+Run from the skill repository:
+
+```bash
+cd ~/projects/skills/skills/browser
+perl cli/get https://example.com --script 'return document.title'
+```
+
+Observed result:
+
+- valid JSON payload returned
+- `status` was `200`
+- `title` was `Example Domain`
+- `script_result` was `Example Domain`
+
+## Latest DD Source Proof
+
+Verified against the latest DD source checkout at:
+
+```bash
+~/projects/developer-dashboard
+```
+
+Verification flow:
+
+```bash
+tmp_home=$(mktemp -d)
+export HOME="$tmp_home"
+perl -I~/projects/developer-dashboard/lib ~/projects/developer-dashboard/bin/dashboard init
+mkdir -p "$HOME/.developer-dashboard/skills"
+cp -R ~/projects/skills/skills/browser "$HOME/.developer-dashboard/skills/browser"
+cpanm --notest -L "$HOME/perl5" --cpanfile ~/projects/developer-dashboard/cpanfile --installdeps ~/projects/developer-dashboard
+cpanm --notest -L "$HOME/perl5" --cpanfile "$HOME/.developer-dashboard/skills/browser/cpanfile" --installdeps "$HOME/.developer-dashboard/skills/browser"
+export PERL5LIB="$HOME/perl5/lib/perl5"
+export PATH="$HOME/perl5/bin:$PATH"
+perl -I~/projects/developer-dashboard/lib ~/projects/developer-dashboard/bin/dashboard browser.get https://example.com --script 'return document.title'
+```
+
+Observed result:
+
+- valid JSON payload returned through the DD command path
+- `status` was `200`
+- `title` was `Example Domain`
+- `script_result` was `Example Domain`
+- the skill started correctly without the earlier `uuid` ESM failure
+
 ## Result
 
 - Docker test suite passed
@@ -54,7 +106,7 @@ cover -report text
 - live X shell markup was fetched successfully for selector alignment
 - live Amazon homepage rendering from the verification environment returned a non-HTML `202` path, so the Amazon examples are based on stable public Amazon navigation and search selectors rather than a full verified live render from this environment
 - `--wait-until` now supports `networkidle`, `load`, and `domcontentloaded`
-- unproven README examples were removed; the remaining examples were either verified against the fixture/test environment or manually verified against live targets during this ticket
+- README examples kept for this skill are verified against either the fixture/test environment or live targets documented in the current verification notes
 - manual live checks confirmed these public examples in the verification environment:
   - `https://example.com` title and `h1`
   - `https://example.com` with jQuery `h1` extraction
@@ -62,6 +114,8 @@ cover -report text
   - `https://www.amazon.com/s?k=desk+lamp` with `--wait-until load`
   - `https://x.com` with `--wait-until load`
   - `https://x.com/jack/status/20` with `--wait-until load`
+- current runtime repair verified that stale `$HOME/node_modules` installs are replaced with a fresh staged install from `package.json`
+- current runtime repair verified that the skill works through the latest DD source checkout after loading DD and skill Perl dependencies
 
 ## Cleanup
 

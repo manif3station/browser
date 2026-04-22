@@ -1,5 +1,11 @@
 Revision history for browser
 
+0.12 2026-04-22
+ - repair Node runtime self-healing so stale merged module trees do not leave `uuid` in an ESM-broken state for `playwright_server`
+ - align runtime installation with DD's staged `npx` package.json install pattern and clear affected module directories before copying fresh installs into `$HOME/node_modules`
+ - auto-detect a usable Chromium or Chrome binary from `PATH` when `CHROMIUM_BIN` is not set
+ - verify the runtime fix through Docker, direct host CLI execution, and the latest DD source checkout
+
 0.11 2026-04-22
  - add `--wait-until` so callers can choose `networkidle`, `load`, or `domcontentloaded`
  - remove unproven documentation examples and keep only verified examples in the README
