@@ -50,6 +50,9 @@ cover -report text
 - ask-mode now uses `waitUntil => "load"` with no default timeout for the initial navigation so slow login pages can stay open for manual work
 - `--timeout-ms` still overrides the initial ask-mode navigation timeout when the caller wants a bounded wait
 - the README now includes explicit JavaScript versus Perl controller guidance and a large practical example library for normal and edge cases
+- the README now includes platform-specific example sets for Amazon and X
+- live X shell markup was fetched successfully for selector alignment
+- live Amazon homepage rendering from the verification environment returned a non-HTML `202` path, so the Amazon examples are based on stable public Amazon navigation and search selectors rather than a full verified live render from this environment
 
 ## Cleanup
 

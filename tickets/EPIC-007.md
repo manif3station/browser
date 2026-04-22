@@ -18,3 +18,5 @@ Add a reusable DD skill that lets a user drive browser-backed GET and POST tasks
 - `DD-024` Add controller-mode browser journeys for full Playwright flows
 - `DD-025` Keep ask-mode sessions open on slow login pages
 - `DD-026` Expand browser mode-selection and example documentation
+- `DD-027` Add Amazon-focused browser examples
+- `DD-028` Add X-focused browser examples

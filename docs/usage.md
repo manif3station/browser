@@ -147,6 +147,10 @@ The full example library is kept in `README.md` and includes:
 - one-page Perl controller examples
 - multi-page Perl flow examples
 - normal cases and edge cases
+- Amazon-focused examples
+- X-focused examples
+
+The Amazon examples are based on stable public Amazon navigation and search selectors, while the X examples are aligned to a live logged-out shell fetch from `x.com`.
 
 ## Captcha Detection
 

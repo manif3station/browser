@@ -571,6 +571,276 @@ return { url => $page->url(), title => $page->title(), usage => $usage };
 '
 ```
 
+### Amazon-Focused Examples
+
+These Amazon examples are shaped around stable public Amazon navigation and search selectors commonly seen on the main site, especially `#twotabsearchtextbox`, `#nav-search-submit-button`, `#nav-cart`, `#nav-link-accountList`, and `#nav-orders`.
+
+In the current verification environment, direct live Amazon homepage rendering returned a non-HTML `202` path instead of a normal fully rendered page, so these examples are realistic Amazon-oriented patterns rather than fully re-verified live-render selectors from this container.
+
+51. Read whether the Amazon search box is present.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return !!document.querySelector("#twotabsearchtextbox")'
+```
+
+52. Read the Amazon search form action.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return document.querySelector("form[action*=\"/s\"]")?.getAttribute("action") || null'
+```
+
+53. Read the Amazon cart link target.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return document.querySelector("#nav-cart")?.href || null'
+```
+
+54. Read the Amazon account link target.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return document.querySelector("#nav-link-accountList")?.href || null'
+```
+
+55. Read the Amazon orders link target.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return document.querySelector("#nav-orders")?.href || null'
+```
+
+56. Read the Amazon global nav text.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return document.querySelector("#nav-xshop")?.innerText || null'
+```
+
+57. Read the selected Amazon search department.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return document.querySelector("#searchDropdownBox")?.value || null'
+```
+
+58. Read the Amazon search placeholder.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return document.querySelector("#twotabsearchtextbox")?.getAttribute("placeholder") || null'
+```
+
+59. List the first ten Amazon nav links.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return Array.from(document.querySelectorAll("#nav-xshop a")).slice(0, 10).map(a => ({ text: a.textContent.trim(), href: a.href }))'
+```
+
+60. Detect whether the Amazon homepage exposes a sign-in link.
+
+```bash
+dashboard browser.get https://www.amazon.com --script 'return !!document.querySelector("#nav-link-accountList, a[href*=\"signin\"]")'
+```
+
+61. Search Amazon for a keyword by building the search URL directly.
+
+```bash
+dashboard browser.get "https://www.amazon.com/s?k=mechanical+keyboard" --script 'return { title: document.title, results: document.querySelectorAll("[data-component-type=\"s-search-result\"]").length }'
+```
+
+62. Read Amazon search result titles.
+
+```bash
+dashboard browser.get "https://www.amazon.com/s?k=usb+c+hub" --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"] h2")).slice(0, 5).map(h => h.textContent.trim())'
+```
+
+63. Read Amazon search result product links.
+
+```bash
+dashboard browser.get "https://www.amazon.com/s?k=usb+c+hub" --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"] h2 a")).slice(0, 5).map(a => a.href)'
+```
+
+64. Read Amazon search result prices when present.
+
+```bash
+dashboard browser.get "https://www.amazon.com/s?k=usb+c+hub" --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"]")).slice(0, 5).map(node => ({ title: node.querySelector("h2")?.textContent?.trim() || null, price: node.querySelector(".a-price .a-offscreen")?.textContent || null }))'
+```
+
+65. Use jQuery to read Amazon result titles.
+
+```bash
+dashboard browser.get "https://www.amazon.com/s?k=wireless+mouse" --jquery --script 'return window.jQuery("[data-component-type=\"s-search-result\"] h2").slice(0, 5).map((_, el) => window.jQuery(el).text().trim()).get()'
+```
+
+66. Navigate from the Amazon homepage to a search result page with Perl controller mode.
+
+```bash
+dashboard browser.get https://www.amazon.com --playwright --script '
+my $response = $page->goto("https://www.amazon.com/s?k=desk+lamp", { waitUntil => "networkidle" });
+return { url => $page->url(), status => $response->status(), title => $page->title() };
+'
+```
+
+67. Open the first Amazon search result from a search page.
+
+```bash
+dashboard browser.get "https://www.amazon.com/s?k=desk+lamp" --playwright --script '
+my $href = $page->evaluate(q{return document.querySelector("[data-component-type=\"s-search-result\"] h2 a")?.href || null});
+die "No Amazon search result link found\n" if !$href;
+$page->goto($href, { waitUntil => "networkidle" });
+return { url => $page->url(), title => $page->title() };
+'
+```
+
+68. Read the product title from an Amazon product page.
+
+```bash
+dashboard browser.get https://www.amazon.com/dp/B0EXAMPLE --script 'return document.querySelector("#productTitle")?.textContent?.trim() || null'
+```
+
+69. Read the buy box price from an Amazon product page.
+
+```bash
+dashboard browser.get https://www.amazon.com/dp/B0EXAMPLE --script 'return document.querySelector(".a-price .a-offscreen")?.textContent || null'
+```
+
+70. Read whether an Amazon product page shows an Add to Cart button.
+
+```bash
+dashboard browser.get https://www.amazon.com/dp/B0EXAMPLE --script 'return !!document.querySelector("#add-to-cart-button, input[name=\"submit.add-to-cart\"]")'
+```
+
+### X-Focused Examples
+
+These X examples are aligned to the current logged-out X shell observed from `https://x.com` in live fetches from the verification environment. The current page shell includes the responsive logged-out client and script bundles from `abs.twimg.com`, while interactive content such as timelines and logged-in actions may still vary after hydration.
+
+71. Read the logged-out X page title.
+
+```bash
+dashboard browser.get https://x.com --script 'return document.title'
+```
+
+72. Detect whether the X logged-out shell has a `main` landmark.
+
+```bash
+dashboard browser.get https://x.com --script 'return !!document.querySelector("main[role=main], main")'
+```
+
+73. Read all script bundle URLs from the X shell.
+
+```bash
+dashboard browser.get https://x.com --script 'return Array.from(document.querySelectorAll("script[src]")).map(s => s.src)'
+```
+
+74. Read all preload script URLs from the X shell.
+
+```bash
+dashboard browser.get https://x.com --script 'return Array.from(document.querySelectorAll("link[rel=preload][as=\"script\"]")).map(link => link.href)'
+```
+
+75. Read whether the shell references `abs.twimg.com`.
+
+```bash
+dashboard browser.get https://x.com --script 'return document.documentElement.innerHTML.includes("abs.twimg.com")'
+```
+
+76. Read whether the shell references `api.x.com`.
+
+```bash
+dashboard browser.get https://x.com --script 'return document.documentElement.innerHTML.includes("api.x.com")'
+```
+
+77. List the first 20 links on the X shell.
+
+```bash
+dashboard browser.get https://x.com --script 'return Array.from(document.querySelectorAll("a[href]")).slice(0, 20).map(a => ({ text: (a.innerText || a.textContent || "").trim(), href: a.href }))'
+```
+
+78. Detect whether a login link is present.
+
+```bash
+dashboard browser.get https://x.com --script 'return !!document.querySelector("a[href*=\"/login\"]")'
+```
+
+79. Detect whether a signup link is present.
+
+```bash
+dashboard browser.get https://x.com --script 'return !!document.querySelector("a[href*=\"/i/flow/signup\"], a[href*=\"/signup\"]")'
+```
+
+80. Read the visible shell text from `main`.
+
+```bash
+dashboard browser.get https://x.com --script 'return document.querySelector("main")?.innerText || document.body.innerText'
+```
+
+81. Read all `aria-label` values from the first batch of links and buttons.
+
+```bash
+dashboard browser.get https://x.com --script 'return Array.from(document.querySelectorAll("a, button")).slice(0, 30).map(el => ({ text: (el.innerText || el.textContent || "").trim(), aria: el.getAttribute("aria-label"), href: el.href || null }))'
+```
+
+82. Inspect X shell headings.
+
+```bash
+dashboard browser.get https://x.com --script 'return Array.from(document.querySelectorAll("h1,h2,h3")).map(el => el.textContent.trim())'
+```
+
+83. Use jQuery to read the first 10 visible links on X.
+
+```bash
+dashboard browser.get https://x.com --jquery --script 'return window.jQuery("a[href]").slice(0, 10).map((_, el) => ({ text: window.jQuery(el).text().trim(), href: el.href })).get()'
+```
+
+84. Use jQuery to read all preloaded script URLs.
+
+```bash
+dashboard browser.get https://x.com --jquery --script 'return window.jQuery("link[rel=\"preload\"][as=\"script\"]").map((_, el) => el.href).get()'
+```
+
+85. Open the X login page directly with controller mode.
+
+```bash
+dashboard browser.get https://x.com --playwright --script '
+my $response = $page->goto("https://x.com/login", { waitUntil => "networkidle" });
+return { url => $page->url(), status => $response->status(), title => $page->title() };
+'
+```
+
+86. Start at X and then jump to a public post URL.
+
+```bash
+dashboard browser.get https://x.com --flow --script '
+my $response = $page->goto("https://x.com/jack/status/20", { waitUntil => "networkidle" });
+return { url => $page->url(), status => $response->status(), title => $page->title() };
+'
+```
+
+87. Read the first tweet-like article text from a public X post page.
+
+```bash
+dashboard browser.get https://x.com/jack/status/20 --script 'return document.querySelector("article")?.innerText || null'
+```
+
+88. Read all article test IDs from a public X page.
+
+```bash
+dashboard browser.get https://x.com/jack/status/20 --script 'return Array.from(document.querySelectorAll("[data-testid]")).map(el => el.getAttribute("data-testid")).filter(Boolean)'
+```
+
+89. Pause for manual X login, then inspect the current page URL and title.
+
+```bash
+dashboard browser.get https://x.com/login --ask --playwright --script '
+return { url => $page->url(), title => $page->title() };
+'
+```
+
+90. Pause for manual X login, then move to a profile and inspect visible page text.
+
+```bash
+dashboard browser.get https://x.com/login --ask --playwright --script '
+$page->goto("https://x.com/OpenAI", { waitUntil => "networkidle" });
+my $text = $page->evaluate(q{return document.querySelector("main")?.innerText || document.body.innerText});
+return { url => $page->url(), title => $page->title(), text => $text };
+'
+```
+
 ## Edge Cases
 
 1. If the skill is not installed, DD will not dispatch `browser.get` or `browser.post`.
@@ -599,3 +869,4 @@ See:
 - `docs/changes/2026-04-22-controller-mode.md`
 - `docs/changes/2026-04-22-ask-timeout.md`
 - `docs/changes/2026-04-22-example-library.md`
+- `docs/changes/2026-04-22-platform-examples.md`

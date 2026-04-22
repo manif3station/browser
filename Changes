@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.10 2026-04-22
+ - add 20 Amazon-focused examples covering search, account, cart, and product-page patterns
+ - add 20 X-focused examples covering logged-out shell inspection, login, post viewing, and multi-page flows
+ - record the live DOM verification limitation for Amazon and the live logged-out shell alignment for X
+
 0.09 2026-04-22
  - expand the README with explicit JavaScript versus Perl controller guidance
  - document when `--jquery` is useful and how to mix Perl control with page-side JavaScript
