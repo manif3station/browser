@@ -31,8 +31,18 @@ eval {
     is( $get_payload->{method}, 'GET', 'browser.get reports the GET method' );
     is( $get_payload->{status}, 200, 'browser.get reports HTTP 200' );
     is( $get_payload->{title}, 'Browser Skill', 'browser.get returns the page title' );
+    is( $get_payload->{content_type}, 'text/html; charset=utf-8', 'browser.get returns response content type' );
     like( $get_payload->{body}, qr/<h1>Browser Skill<\/h1>/, 'browser.get returns the rendered page HTML' );
+    like( $get_payload->{body_text}, qr/Browser Skill/, 'browser.get returns extracted body text' );
+    ok( !$get_payload->{is_captcha}, 'browser.get does not mark normal pages as captcha pages' );
     is( $get_payload->{script_result}{heading}, 'Browser Skill', 'browser.get evaluates Playwright script against the DOM' );
+
+    my $captcha_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/captcha 2>&1};
+    my $captcha_exit = $? >> 8;
+    is( $captcha_exit, 0, "browser.get handles captcha-like pages\n$captcha_output" );
+    my $captcha_payload = decode_json($captcha_output);
+    ok( $captcha_payload->{is_captcha}, 'browser.get marks captcha-like pages' );
+    like( $captcha_payload->{body_text}, qr/unusual traffic/i, 'browser.get returns readable captcha body text' );
 
     my $post_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/post http://127.0.0.1:$port/post --data 'name=dashboard' --script 'return { heading: document.querySelector("h1").textContent, status: window.__BROWSER_POST__.status, body: document.body.textContent.trim() }' 2>&1};
     my $post_exit = $? >> 8;
@@ -40,7 +50,10 @@ eval {
     my $post_payload = decode_json($post_output);
     is( $post_payload->{method}, 'POST', 'browser.post reports the POST method' );
     is( $post_payload->{status}, 200, 'browser.post reports HTTP 200' );
+    is( $post_payload->{content_type}, 'text/html; charset=utf-8', 'browser.post returns response content type' );
     like( $post_payload->{body}, qr/name=dashboard/, 'browser.post returns the response body' );
+    like( $post_payload->{body_text}, qr/Posted/, 'browser.post returns extracted body text' );
+    ok( !$post_payload->{is_captcha}, 'browser.post does not mark normal pages as captcha pages' );
     is( $post_payload->{script_result}{heading}, 'Posted', 'browser.post loads the response body into the page for scripting' );
     is( $post_payload->{script_result}{status}, 200, 'browser.post exposes response metadata in the page context' );
 };
@@ -99,6 +112,11 @@ sub _run_server {
             $status = 200;
             $content_type = 'text/html; charset=utf-8';
             $response_body = '<!doctype html><html><head><title>Posted</title></head><body><h1>Posted</h1><p>' . $body . '</p></body></html>';
+        }
+        elsif ( $method eq 'GET' && $path eq '/captcha' ) {
+            $status = 200;
+            $content_type = 'text/html; charset=utf-8';
+            $response_body = '<!doctype html><html><head><title>Captcha Check</title></head><body><h1>About this page</h1><p>Our systems have detected unusual traffic from your computer network.</p><form id="captcha-form"></form><script src="https://www.google.com/recaptcha/api.js"></script></body></html>';
         }
 
         print {$client} "HTTP/1.1 $status " . ( $status == 200 ? 'OK' : 'Not Found' ) . "\r\n";

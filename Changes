@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.04 2026-04-22
+ - add `content_type`, `body_text`, and `is_captcha` to browser responses
+ - detect obvious CAPTCHA or bot-check pages in browser.get and browser.post payloads
+ - update tests and docs for the richer response payload
+
 0.03 2026-04-22
  - make browser.get return the rendered HTML body alongside URL, status, and title metadata
  - update tests and docs to match the browser.get payload contract

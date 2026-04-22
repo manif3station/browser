@@ -106,13 +106,23 @@ sub _run_command {
 sub _run_get {
     my ( $page, %args ) = @_;
     my $response = $page->goto( $args{url}, { waitUntil => 'networkidle' } );
+    my $headers = $response ? ( $response->headers() || {} ) : {};
+    my $body = $page->content();
+    my $body_text = _page_text($page);
     my $result = {
         method        => 'GET',
         requested_url => $args{url},
         final_url     => $page->url(),
         status        => $response ? $response->status() : undef,
         title         => $page->title(),
-        body          => $page->content(),
+        content_type  => $headers->{'content-type'},
+        body          => $body,
+        body_text     => $body_text,
+        is_captcha    => _is_captcha_page(
+            title     => $page->title(),
+            body      => $body,
+            body_text => $body_text,
+        ),
     };
     $result->{script_result} = $page->evaluate( $args{script} ) if defined $args{script};
     return $result;
@@ -151,10 +161,36 @@ sub _run_post {
         requested_url => $args{url},
         final_url     => $response->url(),
         status        => $status,
+        content_type  => $headers->{'content-type'},
         body          => $body,
+        body_text     => _page_text($page),
     };
+    $result->{is_captcha} = _is_captcha_page(
+        title     => eval { $page->title() } || q{},
+        body      => $html,
+        body_text => $result->{body_text},
+    );
     $result->{script_result} = $page->evaluate( $args{script} ) if defined $args{script};
     return $result;
+}
+
+sub _page_text {
+    my ($page) = @_;
+    return $page->evaluate(q{return document.body ? document.body.innerText : ""});
+}
+
+sub _is_captcha_page {
+    my (%args) = @_;
+    my $title = lc( $args{title} || q{} );
+    my $body = lc( $args{body} || q{} );
+    my $body_text = lc( $args{body_text} || q{} );
+    my $combined = join "\n", $title, $body, $body_text;
+
+    return 1 if $combined =~ /recaptcha/;
+    return 1 if $combined =~ /\bcaptcha\b/;
+    return 1 if $combined =~ /unusual traffic/;
+    return 1 if $combined =~ /verify you are human/;
+    return 0;
 }
 
 sub _response_document {

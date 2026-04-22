@@ -10,6 +10,7 @@ This skill brings browser automation into the DD skill system so a user can:
 
 - fetch and inspect a page through a real browser session
 - capture the rendered HTML body of that page from the CLI
+- capture readable page text and detect obvious CAPTCHA or bot-check pages
 - run a small Playwright JavaScript snippet against the page DOM
 - issue a POST request through Playwright and inspect the returned page content
 - keep that automation isolated inside an installable DD skill

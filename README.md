@@ -26,6 +26,7 @@ Without a shared skill, quick browser-driven automation often ends up split acro
 - `cli/get` for `dashboard browser.get <url>`
 - `cli/post` for `dashboard browser.post <url>`
 - HTML page body output for `browser.get`
+- text extraction, content type reporting, and captcha detection for browser responses
 - optional `--script` evaluation through the Playwright Perl module
 - optional `--data` for `browser.post`
 - DD dependency files so the skill can install its Perl and system prerequisites
@@ -106,6 +107,18 @@ Normal case, fetch the rendered HTML body:
 dashboard browser.get https://example.com
 ```
 
+Normal case, inspect whether a page looks like a bot-check:
+
+```bash
+dashboard browser.get 'https://www.google.com/search?q=developer+dashboard'
+```
+
+The payload now includes:
+
+- `content_type`
+- `body_text`
+- `is_captcha`
+
 Normal case, inspect a heading:
 
 ```bash
@@ -132,6 +145,7 @@ dashboard skills uninstall browser
 - if a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect
 - if the Node runtime has not been installed from `package.json` yet, the first command run may take longer while it runs the same `npm install --prefix "$HOME" <skill-root>` flow DD uses
 - if the page is large, `browser.get` returns the full rendered HTML body and the JSON payload can become large
+- if a site responds with a CAPTCHA or challenge page, `is_captcha` is set to true and `body_text` gives a readable summary of the challenge content
 
 ## Documentation
 

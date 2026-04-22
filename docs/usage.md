@@ -20,14 +20,14 @@ perl cli/post https://example.com/form --data 'name=dashboard'
 
 ## Output
 
-Each command prints one JSON object to stdout. The payload includes the request method, requested URL, final URL, HTTP status, and optional script result.
+Each command prints one JSON object to stdout. The payload includes the request method, requested URL, final URL, HTTP status, optional script result, response `content_type`, extracted `body_text`, and an `is_captcha` flag.
 
 For `browser.get`, the payload also includes the page title and the rendered page HTML body. For `browser.post`, the payload also includes the response body so the caller can inspect returned content from the CLI.
 
 Example GET payload shape:
 
 ```json
-{"requested_url":"https://www.google.com","final_url":"https://www.google.com/","method":"GET","status":200,"title":"Google","body":"<!DOCTYPE html>..."}
+{"requested_url":"https://www.google.com","final_url":"https://www.google.com/","method":"GET","status":200,"title":"Google","content_type":"text/html; charset=utf-8","body":"<!DOCTYPE html>...","body_text":"Google Search ...","is_captcha":false}
 ```
 
 The skill declares its Node-side dependencies in `package.json`, matching the DD skill dependency contract. DD installs that file with:
@@ -54,6 +54,17 @@ dashboard browser.post https://example.com/form --data "name=dd" --script 'retur
 ```
 
 For `browser.post`, the skill loads the response content into a page before evaluating the script. It also exposes response metadata through `window.__BROWSER_POST__`.
+
+## Captcha Detection
+
+The skill marks a response as captcha-like when the rendered page looks like a bot challenge, such as content that includes:
+
+- `captcha`
+- `recaptcha`
+- `unusual traffic`
+- `verify you are human`
+
+This is intended as a practical CLI signal, not a perfect classifier.
 
 ## Edge Cases
 

@@ -46,7 +46,11 @@ use Browser::Runner;
     sub url { $_[0]{url} }
     sub title { $_[0]{title} }
     sub content { $_[0]{content} }
-    sub evaluate { push @{ $_[0]{evaluations} }, $_[1]; return $_[0]{evaluate_return} }
+    sub evaluate {
+        push @{ $_[0]{evaluations} }, $_[1];
+        return $_[0]{body_text} if $_[1] =~ /document\.body \? document\.body\.innerText/;
+        return $_[0]{evaluate_return};
+    }
     sub request { $_[0]{request} }
     sub setContent { $_[0]{set_content} = $_[1]; return 1 }
 }
@@ -75,6 +79,7 @@ my $get_page = FakePage->new(
         url             => 'https://example.test/final',
         title           => 'Example',
         content         => '<html><body><h1>Example</h1></body></html>',
+        body_text       => "Example\n",
         evaluate_return => 'script-value',
     }
 );
@@ -96,7 +101,10 @@ my $get_result = $get_runner->request(
 is( $get_result->{method}, 'GET', 'request returns GET payloads' );
 is( $get_result->{status}, 200, 'GET payload keeps the response status' );
 is( $get_result->{title}, 'Example', 'GET payload keeps the page title' );
+is( $get_result->{content_type}, undef, 'GET payload keeps missing content type when the response did not provide headers' );
 is( $get_result->{body}, '<html><body><h1>Example</h1></body></html>', 'GET payload keeps the page HTML body' );
+is( $get_result->{body_text}, "Example\n", 'GET payload keeps body text' );
+ok( !$get_result->{is_captcha}, 'GET payload does not mark normal pages as captcha pages' );
 is( $get_result->{script_result}, 'script-value', 'GET payload keeps the script result' );
 is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after GET' );
 
@@ -107,6 +115,7 @@ is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after
             url      => 'https://example.test/auto',
             title    => 'Auto',
             content  => '<html><body>Auto</body></html>',
+            body_text => "Auto\n",
         }
     );
     my $auto_playwright = FakePlaywright->new(
@@ -126,6 +135,8 @@ is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after
 my $post_page = FakePage->new(
     {
         request         => FakeRequest->new( { calls => [] } ),
+        title           => 'Posted',
+        body_text       => "Posted\nname=dashboard\n",
         evaluate_return => 'post-script',
     }
 );
@@ -147,7 +158,10 @@ my $post_result = $post_runner->request(
 
 is( $post_result->{method}, 'POST', 'request returns POST payloads' );
 is( $post_result->{status}, 201, 'POST payload keeps the response status' );
+is( $post_result->{content_type}, 'text/plain', 'POST payload keeps the response content type' );
 is( $post_result->{body}, 'name=dashboard', 'POST payload keeps the response body' );
+is( $post_result->{body_text}, "Posted\nname=dashboard\n", 'POST payload keeps body text' );
+ok( !$post_result->{is_captcha}, 'POST payload does not mark normal pages as captcha pages' );
 like( $post_page->{set_content}, qr/browser-post-body/, 'POST payloads wrap plain text into a DOM document' );
 is( $post_page->{request}{calls}[0]{options}{data}, 'name=dashboard', 'POST passes request data through' );
 is( $post_playwright->{quit_count}, 1, 'request quits the Playwright handle after POST' );
@@ -155,6 +169,8 @@ is( $post_playwright->{quit_count}, 1, 'request quits the Playwright handle afte
 my $post_no_data_page = FakePage->new(
     {
         request => FakeRequest->new( { calls => [] } ),
+        title   => 'Posted',
+        body_text => "posted\n",
     }
 );
 my $post_no_data = FakePlaywright->new(
@@ -317,4 +333,7 @@ is( $command_exit, 0, '_run_command returns zero for a successful command' );
     is( ref $playwright, 'Playwright', '_new_playwright loads and instantiates Playwright' );
 }
 
+ok( Browser::Runner::_is_captcha_page( title => 'Captcha Check', body => '<script src=\"recaptcha\"></script>', body_text => 'unusual traffic' ), 'captcha helper detects captcha-like pages' );
+ok( !Browser::Runner::_is_captcha_page( title => 'Normal', body => '<html>ok</html>', body_text => 'hello world' ), 'captcha helper ignores normal pages' );
+is( Browser::Runner::_page_text( FakePage->new( { body_text => "Hello\n" } ) ), "Hello\n", 'page_text extracts body text through the page helper' );
 done_testing();
