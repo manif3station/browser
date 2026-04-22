@@ -107,6 +107,40 @@ is( $get_result->{body_text}, "Example\n", 'GET payload keeps body text' );
 ok( !$get_result->{is_captcha}, 'GET payload does not mark normal pages as captcha pages' );
 is( $get_result->{script_result}, 'script-value', 'GET payload keeps the script result' );
 is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after GET' );
+is( $get_playwright->{launch_args}{type}, 'chrome', 'normal GET keeps the browser type launch option' );
+
+my $interactive_page = FakePage->new(
+    {
+        response  => FakeResponse->new( { status => 200 } ),
+        url       => 'https://example.test/login',
+        title     => 'Login',
+        content   => '<html><body><h1>Login</h1></body></html>',
+        body_text => "Login\n",
+    }
+);
+my $interactive_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $interactive_page } ),
+    }
+);
+my $interactive_runner = Browser::Runner->new(
+    playwright_factory => sub { return $interactive_playwright },
+);
+my $prompt = q{};
+open my $prompt_fh, '>', \$prompt or die "Unable to open prompt scalar: $!";
+my $input = "\n";
+open my $input_fh, '<', \$input or die "Unable to open input scalar: $!";
+my $interactive_get = $interactive_runner->request(
+    method      => 'GET',
+    url         => 'https://example.test/login',
+    interactive => 1,
+    headless    => 0,
+    input_fh    => $input_fh,
+    prompt_fh   => $prompt_fh,
+);
+is( $interactive_get->{title}, 'Login', 'interactive GET still returns the page payload after user takeover' );
+like( $prompt, qr/Complete the captcha or login flow/, 'interactive GET prompts the user before payload capture continues' );
+is( $interactive_playwright->{launch_args}{headless}, 0, 'interactive GET launches a visible browser' );
 
 {
     my $auto_page = FakePage->new(
@@ -336,4 +370,10 @@ is( $command_exit, 0, '_run_command returns zero for a successful command' );
 ok( Browser::Runner::_is_captcha_page( title => 'Captcha Check', body => '<script src=\"recaptcha\"></script>', body_text => 'unusual traffic' ), 'captcha helper detects captcha-like pages' );
 ok( !Browser::Runner::_is_captcha_page( title => 'Normal', body => '<html>ok</html>', body_text => 'hello world' ), 'captcha helper ignores normal pages' );
 is( Browser::Runner::_page_text( FakePage->new( { body_text => "Hello\n" } ) ), "Hello\n", 'page_text extracts body text through the page helper' );
+my $await_prompt = q{};
+open my $await_prompt_fh, '>', \$await_prompt or die "Unable to open await prompt scalar: $!";
+my $await_input = "\n";
+open my $await_input_fh, '<', \$await_input or die "Unable to open await input scalar: $!";
+ok( Browser::Runner::_await_user( input_fh => $await_input_fh, prompt_fh => $await_prompt_fh ), 'await_user returns success after the user confirms' );
+like( $await_prompt, qr/press Enter to continue/i, 'await_user emits the interactive prompt' );
 done_testing();

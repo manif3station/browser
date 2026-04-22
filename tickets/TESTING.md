@@ -42,6 +42,7 @@ cover -report text
 - `browser.get` and `browser.post` both passed Playwright-backed integration tests inside Docker
 - `browser.get` returns the rendered HTML body in its JSON payload
 - browser responses include `content_type`, `body_text`, and `is_captcha`
+- `browser.get` supports `--ask` and `--askme` for visible interactive takeover
 
 ## Cleanup
 

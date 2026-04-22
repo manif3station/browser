@@ -7,6 +7,7 @@ Installed DD usage:
 ```bash
 dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
+dashboard browser.get https://example.com --ask
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
 ```
@@ -54,6 +55,23 @@ dashboard browser.post https://example.com/form --data "name=dd" --script 'retur
 ```
 
 For `browser.post`, the skill loads the response content into a page before evaluating the script. It also exposes response metadata through `window.__BROWSER_POST__`.
+
+## Interactive Mode
+
+`browser.get` accepts `--ask` and `--askme` as the same interactive mode.
+
+When used:
+
+- the browser launches non-headless
+- the page stays open for manual login or CAPTCHA work
+- the command waits for you to press Enter in the terminal
+- after that, the final payload is captured from the current page state
+
+Example:
+
+```bash
+dashboard browser.get 'https://www.google.com/search?q=developer+dashboard' --ask
+```
 
 ## Captcha Detection
 

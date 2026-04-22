@@ -106,6 +106,7 @@ sub _run_command {
 sub _run_get {
     my ( $page, %args ) = @_;
     my $response = $page->goto( $args{url}, { waitUntil => 'networkidle' } );
+    _await_user(%args) if $args{interactive};
     my $headers = $response ? ( $response->headers() || {} ) : {};
     my $body = $page->content();
     my $body_text = _page_text($page);
@@ -172,6 +173,15 @@ sub _run_post {
     );
     $result->{script_result} = $page->evaluate( $args{script} ) if defined $args{script};
     return $result;
+}
+
+sub _await_user {
+    my (%args) = @_;
+    my $input_fh = $args{input_fh} || \*STDIN;
+    my $prompt_fh = $args{prompt_fh} || \*STDERR;
+    print {$prompt_fh} "Browser is open for interactive work. Complete the captcha or login flow, then press Enter to continue.\n";
+    scalar <$input_fh>;
+    return 1;
 }
 
 sub _page_text {

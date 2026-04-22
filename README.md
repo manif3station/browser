@@ -27,6 +27,7 @@ Without a shared skill, quick browser-driven automation often ends up split acro
 - `cli/post` for `dashboard browser.post <url>`
 - HTML page body output for `browser.get`
 - text extraction, content type reporting, and captcha detection for browser responses
+- interactive visible-browser takeover through `--ask` and `--askme`
 - optional `--script` evaluation through the Playwright Perl module
 - optional `--data` for `browser.post`
 - DD dependency files so the skill can install its Perl and system prerequisites
@@ -82,6 +83,7 @@ Installed DD usage:
 ```bash
 dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
+dashboard browser.get https://example.com --ask
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard'
 dashboard browser.post https://example.com/form --script 'return window.__BROWSER_POST__.status'
@@ -119,6 +121,14 @@ The payload now includes:
 - `body_text`
 - `is_captcha`
 
+Normal case, open a visible browser so you can complete a captcha or login and then continue:
+
+```bash
+dashboard browser.get 'https://www.google.com/search?q=developer+dashboard' --ask
+```
+
+`--askme` is accepted as the same interaction mode.
+
 Normal case, inspect a heading:
 
 ```bash
@@ -146,6 +156,7 @@ dashboard skills uninstall browser
 - if the Node runtime has not been installed from `package.json` yet, the first command run may take longer while it runs the same `npm install --prefix "$HOME" <skill-root>` flow DD uses
 - if the page is large, `browser.get` returns the full rendered HTML body and the JSON payload can become large
 - if a site responds with a CAPTCHA or challenge page, `is_captcha` is set to true and `body_text` gives a readable summary of the challenge content
+- if `--ask` or `--askme` is used, the command opens a visible browser and waits for you to press Enter in the terminal before it captures the final payload
 
 ## Documentation
 

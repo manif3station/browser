@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.05 2026-04-22
+ - add `--ask` and `--askme` to browser.get for visible interactive takeover
+ - wait for terminal confirmation before capturing the final page payload after captcha or login work
+ - update tests and docs for interactive ask-mode
+
 0.04 2026-04-22
  - add `content_type`, `body_text`, and `is_captcha` to browser responses
  - detect obvious CAPTCHA or bot-check pages in browser.get and browser.post payloads

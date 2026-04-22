@@ -12,6 +12,7 @@ sub main {
     my (%args) = @_;
     my $output_fh = $args{output_fh} || \*STDOUT;
     my $error_fh  = $args{error_fh}  || \*STDERR;
+    my $input_fh  = $args{input_fh}  || \*STDIN;
 
     my $result = eval { execute(%args) };
     if ( my $error = $@ ) {
@@ -40,11 +41,16 @@ sub execute {
         'data=s'       => \$options{data},
         'browser=s'    => \$options{browser},
         'headless!'    => \$options{headless},
+        'ask!'         => \$options{ask},
+        'askme!'       => \$options{askme},
         'timeout-ms=i' => \$options{timeout_ms},
     ) or die "Invalid options";
 
     my $url = shift @argv or die "Missing URL";
     die "Unexpected arguments: @argv" if @argv;
+
+    my $interactive = $options{ask} || $options{askme} ? 1 : 0;
+    $options{headless} = 0 if $interactive;
 
     my $runner = $args{runner} || Browser::Runner->new();
     return $runner->request(
@@ -54,7 +60,10 @@ sub execute {
         data        => $options{data},
         browser     => $options{browser},
         headless    => $options{headless},
+        interactive => $interactive,
         timeout_ms  => $options{timeout_ms},
+        input_fh    => $args{input_fh} || \*STDIN,
+        prompt_fh   => $args{error_fh} || \*STDERR,
     );
 }
 
