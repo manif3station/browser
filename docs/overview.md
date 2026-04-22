@@ -14,6 +14,7 @@ This skill brings browser automation into the DD skill system so a user can:
 - temporarily hand control to the user in a visible browser session when login or CAPTCHA completion is required
 - optionally inject jQuery into the page context for jQuery-style extraction scripts
 - run a small Playwright JavaScript snippet against the page DOM
+- run a Playwright-driven multi-page journey from one starting URL through controller-mode scripts
 - issue a POST request through Playwright and inspect the returned page content
 - keep that automation isolated inside an installable DD skill
 

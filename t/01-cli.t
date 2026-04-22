@@ -21,6 +21,7 @@ use Browser::CLI;
             status        => 200,
             script_result => $args{script},
             jquery        => $args{jquery},
+            controller    => $args{controller},
             data          => $args{data},
             browser       => $args{browser},
             headless      => $args{headless},
@@ -65,6 +66,27 @@ $interactive_result = Browser::CLI::execute(
     runner => TestRunner->new(),
 );
 is( $interactive_result->{jquery}, 1, 'execute forwards the jquery flag' );
+
+$interactive_result = Browser::CLI::execute(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--playwright', '--script', 'return { ok => 1 }' ],
+    runner => TestRunner->new(),
+);
+is( $interactive_result->{controller}, 1, 'execute enables controller mode for --playwright' );
+
+$interactive_result = Browser::CLI::execute(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--agent', '--script', 'return { ok => 1 }' ],
+    runner => TestRunner->new(),
+);
+is( $interactive_result->{controller}, 1, 'execute enables controller mode for --agent' );
+
+$interactive_result = Browser::CLI::execute(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--flow', '--script', 'return { ok => 1 }' ],
+    runner => TestRunner->new(),
+);
+is( $interactive_result->{controller}, 1, 'execute enables controller mode for --flow' );
 
 my $stdout = q{};
 open my $stdout_fh, '>', \$stdout or die "Unable to open stdout scalar: $!";
@@ -118,6 +140,21 @@ $exit = Browser::CLI::main(
 is( $exit, 0, 'main accepts jquery mode arguments' );
 $payload = decode_json($stdout);
 is( $payload->{jquery}, 1, 'main prints jquery mode in the runner result' );
+
+$stdout = q{};
+$stderr = q{};
+open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for controller mode: $!";
+open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for controller mode: $!";
+$exit = Browser::CLI::main(
+    method    => 'GET',
+    argv      => [ 'https://example.test', '--flow', '--script', 'return { ok => 1 }' ],
+    runner    => TestRunner->new(),
+    output_fh => $stdout_fh,
+    error_fh  => $stderr_fh,
+);
+is( $exit, 0, 'main accepts controller mode arguments' );
+$payload = decode_json($stdout);
+is( $payload->{controller}, 1, 'main prints controller mode in the runner result' );
 
 $stdout = q{};
 $stderr = q{};

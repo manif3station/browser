@@ -9,6 +9,7 @@ dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
 dashboard browser.get https://example.com --ask
 dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
+dashboard browser.get https://example.com --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
 ```
@@ -46,7 +47,7 @@ npm install --prefix "$HOME" .
 
 ## Script Behavior
 
-`--script` accepts a Playwright JavaScript function body, matching the `evaluate()` string-mode contract documented by the Playwright Perl module.
+By default, `--script` accepts a Playwright JavaScript function body, matching the `evaluate()` string-mode contract documented by the Playwright Perl module.
 
 Examples:
 
@@ -56,6 +57,35 @@ dashboard browser.post https://example.com/form --data "name=dd" --script 'retur
 ```
 
 For `browser.post`, the skill loads the response content into a page before evaluating the script. It also exposes response metadata through `window.__BROWSER_POST__`.
+
+## Controller Mode
+
+`--playwright`, `--agent`, and `--flow` are equivalent flags. Any of them switches `--script` from page-context JavaScript into a Perl Playwright controller script.
+
+In controller mode, your script receives:
+
+- `$page`
+- `$browser`
+- `$playwright`
+- `$response`
+- `$method`
+- `$url`
+
+This is the mode to use when the script needs to click, fill, navigate, log in, or continue through multiple pages after the starting URL loads.
+
+Example:
+
+```bash
+dashboard browser.get https://example.com/login --flow --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+```
+
+Example with a fuller journey shape:
+
+```bash
+dashboard browser.get https://example.com/login --playwright --script 'my $email = $page->select("#email"); $email->fill("user@example.com"); my $password = $page->select("#password"); $password->fill("secret"); my $submit = $page->select("button[type=submit]"); $submit->click(); my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+```
+
+The final JSON payload is captured after the controller script finishes, so `final_url`, `title`, `body`, and `body_text` reflect the current page at the end of the flow.
 
 ## jQuery Mode
 
@@ -79,11 +109,18 @@ When used:
 - the page stays open for manual login or CAPTCHA work
 - the command waits for you to press Enter in the terminal
 - after that, the final payload is captured from the current page state
+- if controller mode is also enabled, the Playwright control script runs after that manual pause
 
 Example:
 
 ```bash
 dashboard browser.get 'https://www.google.com/search?q=developer+dashboard' --ask
+```
+
+Example with controller mode:
+
+```bash
+dashboard browser.get https://example.com/login --ask --agent --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 ```
 
 ## Captcha Detection
@@ -105,3 +142,5 @@ This is intended as a practical CLI signal, not a perfect classifier.
 - if a POST response is not HTML, the skill wraps the body in a simple HTML document so a DOM-based script can still inspect it
 - if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill installs `playwright`, `express`, and `uuid` into `$HOME/node_modules`
 - if the page HTML is large, `browser.get` returns that full HTML in the JSON payload
+- if `--ask` or `--askme` is used on a host without a display server, the headed browser launch can fail until the command is run in a desktop-capable environment
+- if controller mode is used, write the script in single quotes so shell expansion does not consume Perl variables like `$page`

@@ -44,6 +44,9 @@ cover -report text
 - browser responses include `content_type`, `body_text`, and `is_captcha`
 - `browser.get` supports `--ask` and `--askme` for visible interactive takeover
 - browser scripts can opt into injected jQuery with `--jquery`
+- `browser.get` accepts `--playwright`, `--agent`, and `--flow` for full Playwright controller-mode journeys
+- the Docker integration suite verifies controller-mode navigation from one page to another
+- ask-mode plus controller-mode compatibility is covered in the runner unit suite because the shared Docker test container does not provide a desktop display server for headed browser launches
 
 ## Cleanup
 

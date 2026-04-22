@@ -28,8 +28,8 @@ sub request {
 
     eval {
         $result = $method eq 'GET'
-          ? _run_get( $page, %args )
-          : _run_post( $page, %args );
+          ? _run_get( $page, browser => $browser, playwright => $playwright, %args )
+          : _run_post( $page, browser => $browser, playwright => $playwright, %args );
         1;
     } or do {
         my $error = $@ || 'Unknown browser skill error';
@@ -108,8 +108,13 @@ sub _run_get {
     my $response = $page->goto( $args{url}, { waitUntil => 'networkidle' } );
     _await_user(%args) if $args{interactive};
     _maybe_inject_jquery( $page, %args );
-    my $headers = $response ? ( $response->headers() || {} ) : {};
-    my $body = $page->content();
+    my $script_result = _run_script(
+        $page,
+        response => $response,
+        %args,
+    );
+    my $headers   = $response ? ( $response->headers() || {} ) : {};
+    my $body      = $page->content();
     my $body_text = _page_text($page);
     my $result = {
         method        => 'GET',
@@ -126,7 +131,7 @@ sub _run_get {
             body_text => $body_text,
         ),
     };
-    $result->{script_result} = $page->evaluate( $args{script} ) if defined $args{script};
+    $result->{script_result} = $script_result if defined $args{script};
     return $result;
 }
 
@@ -157,12 +162,18 @@ sub _run_post {
             body   => $body,
         }
     ) . '; return true;' );
+    _await_user(%args) if $args{interactive};
     _maybe_inject_jquery( $page, %args );
+    my $script_result = _run_script(
+        $page,
+        response => $response,
+        %args,
+    );
 
     my $result = {
         method        => 'POST',
         requested_url => $args{url},
-        final_url     => $response->url(),
+        final_url     => $page->url(),
         status        => $status,
         content_type  => $headers->{'content-type'},
         body          => $body,
@@ -173,7 +184,43 @@ sub _run_post {
         body      => $html,
         body_text => $result->{body_text},
     );
-    $result->{script_result} = $page->evaluate( $args{script} ) if defined $args{script};
+    $result->{script_result} = $script_result if defined $args{script};
+    return $result;
+}
+
+sub _run_script {
+    my ( $page, %args ) = @_;
+    return if !defined $args{script};
+    return _run_controller_script( $page, %args ) if $args{controller};
+    return $page->evaluate( $args{script} );
+}
+
+sub _run_controller_script {
+    my ( $page, %args ) = @_;
+    die "Controller mode requires --script" if !defined $args{script} || $args{script} eq q{};
+
+    my $controller = eval <<"EOF";
+sub {
+    my (\$page, \$browser, \$playwright, \$initial_response, \$method, \$url) = \@_;
+    my \$response = \$initial_response;
+    return sub {
+        $args{script}
+    }->();
+}
+EOF
+    die "Controller script failed: $@" if $@;
+
+    my $result = eval {
+        $controller->(
+            $page,
+            $args{browser},
+            $args{playwright},
+            $args{response},
+            $args{method},
+            $args{url},
+        );
+    };
+    die "Controller script failed: $@" if $@;
     return $result;
 }
 

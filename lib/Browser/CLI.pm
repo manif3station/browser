@@ -39,6 +39,9 @@ sub execute {
         \@argv,
         'script=s'     => \$options{script},
         'jquery!'      => \$options{jquery},
+        'playwright!'  => \$options{playwright},
+        'agent!'       => \$options{agent},
+        'flow!'        => \$options{flow},
         'data=s'       => \$options{data},
         'browser=s'    => \$options{browser},
         'headless!'    => \$options{headless},
@@ -51,6 +54,7 @@ sub execute {
     die "Unexpected arguments: @argv" if @argv;
 
     my $interactive = $options{ask} || $options{askme} ? 1 : 0;
+    my $controller = $options{playwright} || $options{agent} || $options{flow} ? 1 : 0;
     $options{headless} = 0 if $interactive;
 
     my $runner = $args{runner} || Browser::Runner->new();
@@ -59,6 +63,7 @@ sub execute {
         url         => $url,
         script      => $options{script},
         jquery      => $options{jquery},
+        controller  => $controller,
         data        => $options{data},
         browser     => $options{browser},
         headless    => $options{headless},

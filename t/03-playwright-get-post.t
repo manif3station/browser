@@ -43,6 +43,14 @@ eval {
     my $jquery_payload = decode_json($jquery_output);
     is( $jquery_payload->{script_result}, 'Browser Skill', 'browser.get scripts can use injected jQuery' );
 
+    my $flow_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/flow-start --flow --script 'my \$response = \$page->goto("http://127.0.0.1:$port/flow-next", { waitUntil => "networkidle" }); return { title => \$page->title(), url => \$page->url(), status => \$response->status() };' 2>&1};
+    my $flow_exit = $? >> 8;
+    is( $flow_exit, 0, "browser.get accepts controller flow scripts\n$flow_output" );
+    my $flow_payload = decode_json($flow_output);
+    is( $flow_payload->{final_url}, "http://127.0.0.1:$port/flow-next", 'controller flow updates the final URL after navigation' );
+    is( $flow_payload->{title}, 'Flow Final', 'controller flow updates the final title after navigation' );
+    is( $flow_payload->{script_result}{status}, 200, 'controller flow can use Playwright response objects inside the Perl script' );
+
     my $captcha_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/captcha 2>&1};
     my $captcha_exit = $? >> 8;
     is( $captcha_exit, 0, "browser.get handles captcha-like pages\n$captcha_output" );
@@ -113,6 +121,16 @@ sub _run_server {
             $status = 200;
             $content_type = 'text/html; charset=utf-8';
             $response_body = '<!doctype html><html><head><title>Browser Skill</title></head><body><h1>Browser Skill</h1></body></html>';
+        }
+        elsif ( $method eq 'GET' && $path eq '/flow-start' ) {
+            $status = 200;
+            $content_type = 'text/html; charset=utf-8';
+            $response_body = '<!doctype html><html><head><title>Flow Start</title></head><body><h1>Flow Start</h1><a id="next" href="/flow-next">Next</a></body></html>';
+        }
+        elsif ( $method eq 'GET' && $path eq '/flow-next' ) {
+            $status = 200;
+            $content_type = 'text/html; charset=utf-8';
+            $response_body = '<!doctype html><html><head><title>Flow Final</title></head><body><h1>Flow Final</h1><p>journey complete</p></body></html>';
         }
         elsif ( $method eq 'POST' && $path eq '/post' ) {
             $status = 200;

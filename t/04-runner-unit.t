@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 
+use Cwd ();
 use File::Path qw(make_path);
 use File::Spec;
 use File::Temp qw(tempdir);
@@ -46,6 +47,8 @@ use Browser::Runner;
     sub url { $_[0]{url} }
     sub title { $_[0]{title} }
     sub content { $_[0]{content} }
+    sub click { push @{ $_[0]{clicks} }, $_[1]; return 1 }
+    sub fill { push @{ $_[0]{fills} }, [ @_[ 1 .. $#_ ] ]; return 1 }
     sub addScriptTag { push @{ $_[0]{script_tags} }, $_[1]; return 1 }
     sub evaluate {
         push @{ $_[0]{evaluations} }, $_[1];
@@ -178,6 +181,85 @@ my $jquery_runner = Browser::Runner->new(
     is( $jquery_page->{script_tags}[0]{path}, File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ), 'GET injects the local jquery runtime before running the script' );
 }
 
+my $controller_page = FakePage->new(
+    {
+        response  => FakeResponse->new( { status => 200, headers => { 'content-type' => 'text/html; charset=utf-8' } } ),
+        url       => 'https://example.test/start',
+        title     => 'Start',
+        content   => '<html><body><h1>Start</h1></body></html>',
+        body_text => "Start\n",
+    }
+);
+my $controller_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $controller_page } ),
+    }
+);
+my $controller_runner = Browser::Runner->new(
+    playwright_factory => sub { return $controller_playwright },
+);
+my $controller_result = $controller_runner->request(
+    method      => 'GET',
+    url         => 'https://example.test/start',
+    controller  => 1,
+    script      => q{
+        $page->click('#next');
+        $page->{url} = 'https://example.test/final';
+        $page->{title} = 'Final';
+        $page->{content} = '<html><body><h1>Final</h1></body></html>';
+        $page->{body_text} = "Final\n";
+        return {
+            url   => $page->url(),
+            title => $page->title(),
+        };
+    },
+);
+is( $controller_result->{final_url}, 'https://example.test/final', 'controller mode captures the final page URL after the script changes page state' );
+is( $controller_result->{title}, 'Final', 'controller mode captures the final page title after the script changes page state' );
+is( $controller_result->{script_result}{title}, 'Final', 'controller mode returns the Perl script result' );
+is( $controller_page->{clicks}[0], '#next', 'controller mode can call Playwright page methods from the Perl script' );
+
+my $interactive_controller_page = FakePage->new(
+    {
+        response  => FakeResponse->new( { status => 200, headers => { 'content-type' => 'text/html; charset=utf-8' } } ),
+        url       => 'https://example.test/login',
+        title     => 'Login',
+        content   => '<html><body><h1>Login</h1></body></html>',
+        body_text => "Login\n",
+    }
+);
+my $interactive_controller_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $interactive_controller_page } ),
+    }
+);
+my $interactive_controller_runner = Browser::Runner->new(
+    playwright_factory => sub { return $interactive_controller_playwright },
+);
+my $interactive_controller_prompt = q{};
+open my $interactive_controller_prompt_fh, '>', \$interactive_controller_prompt or die "Unable to open interactive controller prompt scalar: $!";
+my $interactive_controller_input = "\n";
+open my $interactive_controller_input_fh, '<', \$interactive_controller_input or die "Unable to open interactive controller input scalar: $!";
+my $interactive_controller_result = $interactive_controller_runner->request(
+    method      => 'GET',
+    url         => 'https://example.test/login',
+    interactive => 1,
+    headless    => 0,
+    controller  => 1,
+    input_fh    => $interactive_controller_input_fh,
+    prompt_fh   => $interactive_controller_prompt_fh,
+    script      => q{
+        $page->{url} = 'https://example.test/account';
+        $page->{title} = 'Account';
+        $page->{content} = '<html><body><h1>Account</h1></body></html>';
+        $page->{body_text} = "Account\n";
+        return { title => $page->title(), url => $page->url() };
+    },
+);
+like( $interactive_controller_prompt, qr/Complete the captcha or login flow/, 'interactive controller mode still prompts before the scripted flow runs' );
+is( $interactive_controller_result->{final_url}, 'https://example.test/account', 'interactive controller mode captures the page after the scripted flow continues' );
+is( $interactive_controller_result->{script_result}{title}, 'Account', 'interactive controller mode returns the controller result after the pause' );
+
 {
     my $auto_page = FakePage->new(
         {
@@ -257,6 +339,34 @@ $post_no_data_runner->request(
 );
 ok( !defined $post_no_data_page->{request}{calls}[0]{options}, 'POST omits request options when no body is supplied' );
 
+my $controller_post_page = FakePage->new(
+    {
+        request   => FakeRequest->new( { calls => [] } ),
+        title     => 'Posted',
+        body_text => "Posted\n",
+    }
+);
+my $controller_post_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $controller_post_page } ),
+    }
+);
+my $controller_post_runner = Browser::Runner->new(
+    playwright_factory => sub { return $controller_post_playwright },
+);
+my $controller_post_result = $controller_post_runner->request(
+    method     => 'POST',
+    url        => 'https://example.test/post',
+    controller => 1,
+    script     => q{
+        $page->{url} = 'https://example.test/dashboard';
+        return { current => $page->url(), method => $method, requested => $url };
+    },
+);
+is( $controller_post_result->{final_url}, 'https://example.test/dashboard', 'POST controller mode updates the final URL from the current page state' );
+is( $controller_post_result->{script_result}{method}, 'POST', 'POST controller mode exposes the request method to the Perl script' );
+is( $controller_post_result->{script_result}{requested}, 'https://example.test/post', 'POST controller mode exposes the requested URL to the Perl script' );
+
 my $error_playwright = FakePlaywright->new(
     {
         browser => FakeBrowser->new(
@@ -284,6 +394,53 @@ is( $error_playwright->{quit_count}, 1, 'request still quits the Playwright hand
 
 eval { $runner->request( method => 'DELETE', url => 'https://example.test' ) };
 like( $@, qr/Unsupported method: DELETE/, 'request rejects unsupported methods' );
+
+eval {
+    Browser::Runner::_run_controller_script(
+        FakePage->new( {} ),
+        browser    => FakeBrowser->new( {} ),
+        playwright => FakePlaywright->new( {} ),
+        method     => 'GET',
+        url        => 'https://example.test',
+        script     => q{return { ok => 1, current => $page->url() }},
+    );
+};
+is_deeply( $@, q{}, 'controller helper accepts valid Perl scripts' );
+
+my $controller_helper = Browser::Runner::_run_controller_script(
+    FakePage->new( { url => 'https://example.test/controller' } ),
+    browser    => FakeBrowser->new( {} ),
+    playwright => FakePlaywright->new( {} ),
+    response   => FakeResponse->new( { status => 201 } ),
+    method     => 'GET',
+    url        => 'https://example.test',
+    script     => q{return { url => $page->url(), method => $method, status => $response->status() }},
+);
+is( $controller_helper->{url}, 'https://example.test/controller', 'controller helper exposes the page object to the Perl script' );
+is( $controller_helper->{status}, 201, 'controller helper exposes the response object to the Perl script' );
+
+eval {
+    Browser::Runner::_run_controller_script(
+        FakePage->new( {} ),
+        browser    => FakeBrowser->new( {} ),
+        playwright => FakePlaywright->new( {} ),
+        method     => 'GET',
+        url        => 'https://example.test',
+        script     => q{die "bad flow\n";},
+    );
+};
+like( $@, qr/Controller script failed: bad flow/, 'controller helper wraps controller script failures clearly' );
+
+eval {
+    Browser::Runner::_run_controller_script(
+        FakePage->new( {} ),
+        browser    => FakeBrowser->new( {} ),
+        playwright => FakePlaywright->new( {} ),
+        method     => 'GET',
+        url        => 'https://example.test',
+    );
+};
+like( $@, qr/Controller mode requires --script/, 'controller helper rejects missing scripts' );
 
 {
     local $ENV{CHROMIUM_BIN};

@@ -2,7 +2,7 @@
 
 ## Description
 
-`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It gives DD users a reusable way to fetch a page, run a small Playwright JavaScript snippet, and issue browser-managed POST requests from the command line.
+`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It gives DD users a reusable way to fetch a page, run either a page-context JavaScript snippet or a full Playwright control script, and issue browser-managed POST requests from the command line.
 
 ## Value
 
@@ -12,6 +12,7 @@ It helps a user:
 
 - inspect a page through a real browser session
 - run a small DOM task directly from the CLI
+- run a multi-page browser journey from one starting URL
 - issue a POST request and inspect the returned content
 - keep this automation isolated in an installable DD skill
 
@@ -29,7 +30,8 @@ Without a shared skill, quick browser-driven automation often ends up split acro
 - text extraction, content type reporting, and captcha detection for browser responses
 - interactive visible-browser takeover through `--ask` and `--askme`
 - optional jQuery injection through `--jquery`
-- optional `--script` evaluation through the Playwright Perl module
+- optional page-context JavaScript through `--script`
+- optional Playwright controller mode through `--playwright`, `--agent`, and `--flow`
 - optional `--data` for `browser.post`
 - DD dependency files so the skill can install its Perl and system prerequisites
 - `package.json` so DD can install the Node runtime dependencies into `$HOME`
@@ -86,6 +88,7 @@ dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
 dashboard browser.get https://example.com --ask
 dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
+dashboard browser.get https://example.com --flow --script 'my $response = $page->goto("https://example.com/next", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard'
 dashboard browser.post https://example.com/form --script 'return window.__BROWSER_POST__.status'
@@ -137,6 +140,18 @@ Normal case, inject jQuery so the script can use `$()` selectors:
 dashboard browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
 ```
 
+Normal case, run a full multi-page Playwright flow from one starting URL:
+
+```bash
+dashboard browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+```
+
+Normal case, pause for manual login or CAPTCHA work and then continue with a Playwright flow:
+
+```bash
+dashboard browser.get https://example.com/login --ask --playwright --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+```
+
 Normal case, inspect a heading:
 
 ```bash
@@ -165,7 +180,10 @@ dashboard skills uninstall browser
 - if the page is large, `browser.get` returns the full rendered HTML body and the JSON payload can become large
 - if a site responds with a CAPTCHA or challenge page, `is_captcha` is set to true and `body_text` gives a readable summary of the challenge content
 - if `--ask` or `--askme` is used, the command opens a visible browser and waits for you to press Enter in the terminal before it captures the final payload
+- if `--ask` or `--askme` is used in an environment without a display server, the visible browser launch can fail until the command is run on a host with a desktop session
 - if `--jquery` is used, the skill injects its locally installed jQuery runtime into the page before your script runs
+- if `--playwright`, `--agent`, or `--flow` is used, `--script` is treated as a Perl Playwright control script instead of page-context JavaScript
+- if controller mode navigates to another page, the final payload reflects the current page state after the flow
 
 ## Documentation
 
@@ -174,3 +192,4 @@ See:
 - `docs/overview.md`
 - `docs/usage.md`
 - `docs/changes/2026-04-21-browser-gating.md`
+- `docs/changes/2026-04-22-controller-mode.md`

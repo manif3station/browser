@@ -15,5 +15,6 @@ Created the first gated version of the `browser` skill.
 - browser responses now include `content_type`, `body_text`, and `is_captcha`
 - `browser.get` now supports `--ask` and `--askme` for visible interactive takeover before payload capture
 - browser scripts can opt into injected jQuery through `--jquery`
+- browser scripts can switch into full Playwright controller mode through `--playwright`, `--agent`, or `--flow`
 - Docker-based test and coverage gate
 - skill-local README, docs, changelog, and ticket records
