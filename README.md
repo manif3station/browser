@@ -25,6 +25,7 @@ Without a shared skill, quick browser-driven automation often ends up split acro
 
 - `cli/get` for `dashboard browser.get <url>`
 - `cli/post` for `dashboard browser.post <url>`
+- HTML page body output for `browser.get`
 - optional `--script` evaluation through the Playwright Perl module
 - optional `--data` for `browser.post`
 - DD dependency files so the skill can install its Perl and system prerequisites
@@ -99,6 +100,12 @@ Normal case, fetch a page title:
 dashboard browser.get https://example.com --script 'return document.title'
 ```
 
+Normal case, fetch the rendered HTML body:
+
+```bash
+dashboard browser.get https://example.com
+```
+
 Normal case, inspect a heading:
 
 ```bash
@@ -124,6 +131,7 @@ dashboard skills uninstall browser
 - if the target host is unavailable, the Playwright run exits non-zero
 - if a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect
 - if the Node runtime has not been installed from `package.json` yet, the first command run may take longer while it runs the same `npm install --prefix "$HOME" <skill-root>` flow DD uses
+- if the page is large, `browser.get` returns the full rendered HTML body and the JSON payload can become large
 
 ## Documentation
 

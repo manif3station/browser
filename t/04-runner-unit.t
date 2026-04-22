@@ -45,6 +45,7 @@ use Browser::Runner;
     sub goto { $_[0]{goto_args} = [ @_[ 1 .. $#_ ] ]; return $_[0]{response} }
     sub url { $_[0]{url} }
     sub title { $_[0]{title} }
+    sub content { $_[0]{content} }
     sub evaluate { push @{ $_[0]{evaluations} }, $_[1]; return $_[0]{evaluate_return} }
     sub request { $_[0]{request} }
     sub setContent { $_[0]{set_content} = $_[1]; return 1 }
@@ -73,6 +74,7 @@ my $get_page = FakePage->new(
         response        => FakeResponse->new( { status => 200 } ),
         url             => 'https://example.test/final',
         title           => 'Example',
+        content         => '<html><body><h1>Example</h1></body></html>',
         evaluate_return => 'script-value',
     }
 );
@@ -94,6 +96,7 @@ my $get_result = $get_runner->request(
 is( $get_result->{method}, 'GET', 'request returns GET payloads' );
 is( $get_result->{status}, 200, 'GET payload keeps the response status' );
 is( $get_result->{title}, 'Example', 'GET payload keeps the page title' );
+is( $get_result->{body}, '<html><body><h1>Example</h1></body></html>', 'GET payload keeps the page HTML body' );
 is( $get_result->{script_result}, 'script-value', 'GET payload keeps the script result' );
 is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after GET' );
 
@@ -103,6 +106,7 @@ is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after
             response => FakeResponse->new( { status => 204 } ),
             url      => 'https://example.test/auto',
             title    => 'Auto',
+            content  => '<html><body>Auto</body></html>',
         }
     );
     my $auto_playwright = FakePlaywright->new(

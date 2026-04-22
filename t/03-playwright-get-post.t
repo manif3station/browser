@@ -31,6 +31,7 @@ eval {
     is( $get_payload->{method}, 'GET', 'browser.get reports the GET method' );
     is( $get_payload->{status}, 200, 'browser.get reports HTTP 200' );
     is( $get_payload->{title}, 'Browser Skill', 'browser.get returns the page title' );
+    like( $get_payload->{body}, qr/<h1>Browser Skill<\/h1>/, 'browser.get returns the rendered page HTML' );
     is( $get_payload->{script_result}{heading}, 'Browser Skill', 'browser.get evaluates Playwright script against the DOM' );
 
     my $post_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/post http://127.0.0.1:$port/post --data 'name=dashboard' --script 'return { heading: document.querySelector("h1").textContent, status: window.__BROWSER_POST__.status, body: document.body.textContent.trim() }' 2>&1};

@@ -1,5 +1,9 @@
 Revision history for browser
 
+0.03 2026-04-22
+ - make browser.get return the rendered HTML body alongside URL, status, and title metadata
+ - update tests and docs to match the browser.get payload contract
+
 0.02 2026-04-21
  - add package.json for DD-managed Node dependency installation
  - align browser runtime bootstrap with DD package.json install behavior under $HOME

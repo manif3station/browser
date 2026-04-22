@@ -22,7 +22,13 @@ perl cli/post https://example.com/form --data 'name=dashboard'
 
 Each command prints one JSON object to stdout. The payload includes the request method, requested URL, final URL, HTTP status, and optional script result.
 
-For `browser.get`, the payload also includes the page title. For `browser.post`, the payload also includes the response body so the caller can inspect returned content from the CLI.
+For `browser.get`, the payload also includes the page title and the rendered page HTML body. For `browser.post`, the payload also includes the response body so the caller can inspect returned content from the CLI.
+
+Example GET payload shape:
+
+```json
+{"requested_url":"https://www.google.com","final_url":"https://www.google.com/","method":"GET","status":200,"title":"Google","body":"<!DOCTYPE html>..."}
+```
 
 The skill declares its Node-side dependencies in `package.json`, matching the DD skill dependency contract. DD installs that file with:
 
@@ -56,3 +62,4 @@ For `browser.post`, the skill loads the response content into a page before eval
 - if the target URL cannot be reached, Playwright raises an error and the command exits non-zero
 - if a POST response is not HTML, the skill wraps the body in a simple HTML document so a DOM-based script can still inspect it
 - if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill installs `playwright`, `express`, and `uuid` into `$HOME/node_modules`
+- if the page HTML is large, `browser.get` returns that full HTML in the JSON payload

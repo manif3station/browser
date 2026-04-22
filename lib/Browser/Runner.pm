@@ -112,6 +112,7 @@ sub _run_get {
         final_url     => $page->url(),
         status        => $response ? $response->status() : undef,
         title         => $page->title(),
+        body          => $page->content(),
     };
     $result->{script_result} = $page->evaluate( $args{script} ) if defined $args{script};
     return $result;

@@ -11,5 +11,6 @@ Created the first gated version of the `browser` skill.
 - `package.json` for DD-managed Node dependency installation
 - `browser.get` and `browser.post` CLI commands
 - runtime bootstrap aligned to DD's `npm install --prefix "$HOME" <skill-root>` behavior
+- `browser.get` now returns the rendered HTML body alongside the page metadata
 - Docker-based test and coverage gate
 - skill-local README, docs, changelog, and ticket records
