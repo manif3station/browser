@@ -10,6 +10,7 @@ dashboard browser.get https://example.com --script 'return document.title'
 dashboard browser.get https://example.com --ask
 dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
 dashboard browser.get https://example.com --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
 ```
@@ -110,6 +111,8 @@ When used:
 - the command waits for you to press Enter in the terminal
 - after that, the final payload is captured from the current page state
 - if controller mode is also enabled, the Playwright control script runs after that manual pause
+- the initial page navigation uses `waitUntil => "load"` instead of `networkidle`
+- the initial page navigation disables the timeout unless `--timeout-ms` is set
 
 Example:
 
@@ -121,6 +124,12 @@ Example with controller mode:
 
 ```bash
 dashboard browser.get https://example.com/login --ask --agent --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+```
+
+If you still want a bounded initial wait in ask-mode:
+
+```bash
+dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 ```
 
 ## Captcha Detection
@@ -143,4 +152,5 @@ This is intended as a practical CLI signal, not a perfect classifier.
 - if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill installs `playwright`, `express`, and `uuid` into `$HOME/node_modules`
 - if the page HTML is large, `browser.get` returns that full HTML in the JSON payload
 - if `--ask` or `--askme` is used on a host without a display server, the headed browser launch can fail until the command is run in a desktop-capable environment
+- if a login page keeps long-lived background requests open, ask-mode avoids `networkidle` on the initial load so the browser session can stay open for manual work
 - if controller mode is used, write the script in single quotes so shell expansion does not consume Perl variables like `$page`

@@ -105,7 +105,7 @@ sub _run_command {
 
 sub _run_get {
     my ( $page, %args ) = @_;
-    my $response = $page->goto( $args{url}, { waitUntil => 'networkidle' } );
+    my $response = $page->goto( $args{url}, _goto_options(%args) );
     _await_user(%args) if $args{interactive};
     _maybe_inject_jquery( $page, %args );
     my $script_result = _run_script(
@@ -133,6 +133,20 @@ sub _run_get {
     };
     $result->{script_result} = $script_result if defined $args{script};
     return $result;
+}
+
+sub _goto_options {
+    my (%args) = @_;
+    my %options = (
+        waitUntil => $args{interactive} ? 'load' : 'networkidle',
+    );
+    if ( defined $args{timeout_ms} ) {
+        $options{timeout} = $args{timeout_ms};
+    }
+    elsif ( $args{interactive} ) {
+        $options{timeout} = 0;
+    }
+    return \%options;
 }
 
 sub _run_post {

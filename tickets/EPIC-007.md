@@ -16,3 +16,4 @@ Add a reusable DD skill that lets a user drive browser-backed GET and POST tasks
 - `DD-022` Run Docker tests, coverage, docs, commit, and push
 - `DD-023` Add interactive ask-mode for visible browser takeover
 - `DD-024` Add controller-mode browser journeys for full Playwright flows
+- `DD-025` Keep ask-mode sessions open on slow login pages

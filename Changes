@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.08 2026-04-22
+ - change ask-mode initial navigation to use `load` instead of `networkidle`
+ - disable the initial ask-mode timeout by default so slow login pages stay open for manual work
+ - keep `--timeout-ms` as an explicit override for bounded waits
+
 0.07 2026-04-22
  - add `--playwright`, `--agent`, and `--flow` as controller-mode aliases for full Perl-side Playwright flows
  - make `--ask` compatible with controller-mode flows so manual login or CAPTCHA work can continue into scripted navigation

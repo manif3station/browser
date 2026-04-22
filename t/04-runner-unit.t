@@ -145,6 +145,8 @@ my $interactive_get = $interactive_runner->request(
 is( $interactive_get->{title}, 'Login', 'interactive GET still returns the page payload after user takeover' );
 like( $prompt, qr/Complete the captcha or login flow/, 'interactive GET prompts the user before payload capture continues' );
 is( $interactive_playwright->{launch_args}{headless}, 0, 'interactive GET launches a visible browser' );
+is( $interactive_page->{goto_args}[1]{waitUntil}, 'load', 'interactive GET uses load instead of networkidle for the initial page' );
+is( $interactive_page->{goto_args}[1]{timeout}, 0, 'interactive GET disables the initial goto timeout by default' );
 
 my $jquery_page = FakePage->new(
     {
@@ -218,6 +220,7 @@ is( $controller_result->{final_url}, 'https://example.test/final', 'controller m
 is( $controller_result->{title}, 'Final', 'controller mode captures the final page title after the script changes page state' );
 is( $controller_result->{script_result}{title}, 'Final', 'controller mode returns the Perl script result' );
 is( $controller_page->{clicks}[0], '#next', 'controller mode can call Playwright page methods from the Perl script' );
+is( $controller_page->{goto_args}[1]{waitUntil}, 'networkidle', 'controller mode without ask still uses networkidle for the starting page' );
 
 my $interactive_controller_page = FakePage->new(
     {
@@ -259,6 +262,34 @@ my $interactive_controller_result = $interactive_controller_runner->request(
 like( $interactive_controller_prompt, qr/Complete the captcha or login flow/, 'interactive controller mode still prompts before the scripted flow runs' );
 is( $interactive_controller_result->{final_url}, 'https://example.test/account', 'interactive controller mode captures the page after the scripted flow continues' );
 is( $interactive_controller_result->{script_result}{title}, 'Account', 'interactive controller mode returns the controller result after the pause' );
+is( $interactive_controller_page->{goto_args}[1]{waitUntil}, 'load', 'interactive controller mode uses load for the starting page' );
+is( $interactive_controller_page->{goto_args}[1]{timeout}, 0, 'interactive controller mode disables the initial goto timeout by default' );
+
+my $timeout_page = FakePage->new(
+    {
+        response  => FakeResponse->new( { status => 200 } ),
+        url       => 'https://example.test/slow',
+        title     => 'Slow',
+        content   => '<html><body><h1>Slow</h1></body></html>',
+        body_text => "Slow\n",
+    }
+);
+my $timeout_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $timeout_page } ),
+    }
+);
+my $timeout_runner = Browser::Runner->new(
+    playwright_factory => sub { return $timeout_playwright },
+);
+$timeout_runner->request(
+    method      => 'GET',
+    url         => 'https://example.test/slow',
+    interactive => 1,
+    headless    => 0,
+    timeout_ms  => 45000,
+);
+is( $timeout_page->{goto_args}[1]{timeout}, 45000, 'interactive GET respects an explicit timeout override' );
 
 {
     my $auto_page = FakePage->new(
@@ -563,6 +594,9 @@ is( $command_exit, 0, '_run_command returns zero for a successful command' );
 ok( Browser::Runner::_is_captcha_page( title => 'Captcha Check', body => '<script src=\"recaptcha\"></script>', body_text => 'unusual traffic' ), 'captcha helper detects captcha-like pages' );
 ok( !Browser::Runner::_is_captcha_page( title => 'Normal', body => '<html>ok</html>', body_text => 'hello world' ), 'captcha helper ignores normal pages' );
 is( Browser::Runner::_page_text( FakePage->new( { body_text => "Hello\n" } ) ), "Hello\n", 'page_text extracts body text through the page helper' );
+is_deeply( Browser::Runner::_goto_options(), { waitUntil => 'networkidle' }, 'goto_options defaults to networkidle for non-interactive runs' );
+is_deeply( Browser::Runner::_goto_options( interactive => 1 ), { waitUntil => 'load', timeout => 0 }, 'goto_options defaults interactive runs to load with no timeout' );
+is_deeply( Browser::Runner::_goto_options( interactive => 1, timeout_ms => 120000 ), { waitUntil => 'load', timeout => 120000 }, 'goto_options keeps explicit timeout overrides' );
 {
     my $temp_root = tempdir( CLEANUP => 1 );
     make_path( File::Spec->catdir( $temp_root, 'node_modules', 'jquery', 'dist' ) );

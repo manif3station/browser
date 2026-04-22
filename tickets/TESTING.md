@@ -47,6 +47,8 @@ cover -report text
 - `browser.get` accepts `--playwright`, `--agent`, and `--flow` for full Playwright controller-mode journeys
 - the Docker integration suite verifies controller-mode navigation from one page to another
 - ask-mode plus controller-mode compatibility is covered in the runner unit suite because the shared Docker test container does not provide a desktop display server for headed browser launches
+- ask-mode now uses `waitUntil => "load"` with no default timeout for the initial navigation so slow login pages can stay open for manual work
+- `--timeout-ms` still overrides the initial ask-mode navigation timeout when the caller wants a bounded wait
 
 ## Cleanup
 
