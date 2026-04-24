@@ -55,6 +55,16 @@ use Browser::Runner;
         return $_[0]{body_text} if $_[1] =~ /document\.body \? document\.body\.innerText/;
         return $_[0]{evaluate_return};
     }
+    sub screenshot {
+        my ( $self, $options ) = @_;
+        $self->{screenshot_args} = $options;
+        if ( my $path = $options->{path} ) {
+            open my $fh, '>', $path or die "Unable to write fake screenshot $path: $!";
+            print {$fh} "fake png\n";
+            close $fh;
+        }
+        return 1;
+    }
     sub request { $_[0]{request} }
     sub setContent { $_[0]{set_content} = $_[1]; return 1 }
 }
@@ -208,6 +218,14 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     ok( !Browser::Runner::_version_satisfies_spec( 'not-a-version', '^1.2.3' ), 'version_satisfies_spec rejects non-numeric installed versions' );
     ok( !defined scalar Browser::Runner::_version_parts(undef), 'version_parts returns undef for missing versions' );
     ok( !defined scalar Browser::Runner::_version_parts('not-a-version'), 'version_parts returns undef for non-numeric versions' );
+    {
+        my $tmp = tempdir( CLEANUP => 1 );
+        local $ENV{TMPDIR} = $tmp;
+        my $path = Browser::Runner::_screenshot_path();
+        like( $path, qr{\A$tmp/browser-[A-Fa-f0-9]+\.png\z}, 'screenshot_path defaults to TMPDIR with a generated .png filename' );
+        is( Browser::Runner::_screenshot_path('/tmp/example'), '/tmp/example.png', 'screenshot_path appends .png when missing' );
+        is( Browser::Runner::_screenshot_path('/tmp/example.png'), '/tmp/example.png', 'screenshot_path keeps an existing .png suffix unchanged' );
+    }
     is(
         Browser::Runner::_make_path_if_missing( File::Spec->catdir( $temp_root, 'node_modules' ) ),
         1,
@@ -294,6 +312,35 @@ ok( !$get_result->{is_captcha}, 'GET payload does not mark normal pages as captc
 is( $get_result->{script_result}, 'script-value', 'GET payload keeps the script result' );
 is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after GET' );
 is( $get_playwright->{launch_args}{type}, 'chrome', 'normal GET keeps the browser type launch option' );
+
+my $png_temp = tempdir( CLEANUP => 1 );
+my $png_page = FakePage->new(
+    {
+        response  => FakeResponse->new( { status => 200 } ),
+        url       => 'https://example.test/final',
+        title     => 'Example Screenshot',
+        content   => '<html><body><h1>Example</h1></body></html>',
+        body_text => "Example\n",
+    }
+);
+my $png_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $png_page } ),
+    }
+);
+my $png_runner = Browser::Runner->new(
+    playwright_factory => sub { return $png_playwright },
+);
+my $png_result = $png_runner->request(
+    method => 'PNG',
+    url    => 'https://example.test',
+    file   => File::Spec->catfile( $png_temp, 'shot' ),
+);
+is( $png_result->{method}, 'PNG', 'request returns PNG payloads' );
+is( $png_result->{file}, File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG payload reports the normalized screenshot path' );
+is( $png_page->{screenshot_args}{path}, File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG request sends the normalized path to the screenshot helper' );
+ok( -f File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG request creates the screenshot file' );
+is( $png_playwright->{quit_count}, 1, 'request quits the Playwright handle after PNG' );
 
 my $interactive_page = FakePage->new(
     {

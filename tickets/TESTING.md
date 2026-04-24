@@ -37,21 +37,24 @@ Latest covered result for the current runtime-repair ticket:
 - `lib/Browser/CLI.pm` `100.0%` statement, `100.0%` subroutine
 - `lib/Browser/Runner.pm` `100.0%` statement, `100.0%` subroutine
 
+Latest covered result for `DD-031`:
+
+- `lib/Browser/CLI.pm` `100.0%` statement, `100.0%` subroutine
+- `lib/Browser/Runner.pm` `100.0%` statement, `100.0%` subroutine
+
 ## Direct Host Proof
 
 Run from the skill repository:
 
 ```bash
 cd ~/projects/skills/skills/browser
-perl cli/get https://example.com --script 'return document.title'
+perl cli/png https://example.com --file /tmp/browser-proof
 ```
 
 Observed result:
 
-- valid JSON payload returned
-- `status` was `200`
-- `title` was `Example Domain`
-- `script_result` was `Example Domain`
+- stdout printed `/tmp/browser-proof.png`
+- the file existed and was non-empty
 
 ## Latest DD Source Proof
 
@@ -73,16 +76,28 @@ cpanm --notest -L "$HOME/perl5" --cpanfile ~/projects/developer-dashboard/cpanfi
 cpanm --notest -L "$HOME/perl5" --cpanfile "$HOME/.developer-dashboard/skills/browser/cpanfile" --installdeps "$HOME/.developer-dashboard/skills/browser"
 export PERL5LIB="$HOME/perl5/lib/perl5"
 export PATH="$HOME/perl5/bin:$PATH"
-perl -I~/projects/developer-dashboard/lib ~/projects/developer-dashboard/bin/dashboard browser.get https://example.com --script 'return document.title'
+perl -I~/projects/developer-dashboard/lib ~/projects/developer-dashboard/bin/dashboard browser.png https://example.com --file /tmp/browser-proof
 ```
 
 Observed result:
 
-- valid JSON payload returned through the DD command path
-- `status` was `200`
-- `title` was `Example Domain`
-- `script_result` was `Example Domain`
+- stdout printed `/tmp/browser-proof.png` through the DD command path
+- the file existed and was non-empty
 - the skill started correctly without the earlier `uuid` ESM failure
+
+## Installed DD Proof
+
+Run from the normal host environment:
+
+```bash
+tmp=$(mktemp -d)
+dashboard browser.png https://example.com --file "$tmp/installed-proof"
+```
+
+Observed result:
+
+- stdout printed `$tmp/installed-proof.png`
+- the file existed and was non-empty
 
 ## Result
 
@@ -92,6 +107,11 @@ Observed result:
 - `lib/Browser/Runner.pm` reached `100.0%` statement coverage
 - `lib/Browser/Runner.pm` reached `100.0%` subroutine coverage
 - `browser.get` and `browser.post` both passed Playwright-backed integration tests inside Docker
+- `browser.png` passed Playwright-backed integration tests inside Docker
+- `browser.png` prints only the saved file path instead of JSON
+- `browser.png` appends `.png` when `--file` omitted the suffix
+- `browser.png` preserves an existing `.png` suffix without duplication
+- `browser.png` defaults to a random `/tmp/browser-*.png` path when `--file` is omitted
 - `browser.get` returns the rendered HTML body in its JSON payload
 - browser responses include `content_type`, `body_text`, and `is_captcha`
 - `browser.get` supports `--ask` and `--askme` for visible interactive takeover

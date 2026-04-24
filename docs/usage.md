@@ -15,6 +15,8 @@ dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load -
 dashboard browser.get https://x.com --wait-until load --script 'return document.title'
 dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
+dashboard browser.png https://example.com
+dashboard browser.png https://example.com --file /tmp/example-shot
 ```
 
 Local repository usage during development:
@@ -22,13 +24,22 @@ Local repository usage during development:
 ```bash
 perl cli/get https://example.com
 perl cli/post https://example.com/form --data 'name=dashboard'
+perl cli/png https://example.com --file /tmp/example-shot
 ```
 
 ## Output
 
-Each command prints one JSON object to stdout. The payload includes the request method, requested URL, final URL, HTTP status, optional script result, response `content_type`, extracted `body_text`, and an `is_captcha` flag.
+`browser.get` and `browser.post` print one JSON object to stdout. The payload includes the request method, requested URL, final URL, HTTP status, optional script result, response `content_type`, extracted `body_text`, and an `is_captcha` flag.
 
 For `browser.get`, the payload also includes the page title and the rendered page HTML body. For `browser.post`, the payload also includes the response body so the caller can inspect returned content from the CLI.
+
+`browser.png` prints only the saved PNG file path to stdout.
+
+Example:
+
+```text
+/tmp/example-shot.png
+```
 
 Example GET payload shape:
 
@@ -49,6 +60,16 @@ For direct local development outside DD, use:
 ```bash
 npm install --prefix "$HOME" .
 ```
+
+## Screenshot Behavior
+
+`browser.png` captures the rendered page after navigation and writes one PNG file.
+
+If `--file` is omitted, the skill writes to a generated tmp path under `/tmp` and prints that path.
+
+If `--file` is supplied without a `.png` suffix, the skill appends `.png`.
+
+If `--file` already ends in `.png`, the skill keeps the filename as-is and does not add another suffix.
 
 ## Script Behavior
 
@@ -190,6 +211,7 @@ This is intended as a practical CLI signal, not a perfect classifier.
 - if `$HOME/node_modules` contains stale module trees from an older install, the skill clears the affected package directories and reinstalls them from the current `package.json`
 - if `CHROMIUM_BIN` is not set, the skill looks for a usable system Chromium or Chrome binary on `PATH`
 - if the page HTML is large, `browser.get` returns that full HTML in the JSON payload
+- if `browser.png` is called without `--file`, the generated filename is random and will vary between runs
 - if `--ask` or `--askme` is used on a host without a display server, the headed browser launch can fail until the command is run in a desktop-capable environment
 - if a login page keeps long-lived background requests open, ask-mode avoids `networkidle` on the initial load so the browser session can stay open for manual work
 - if controller mode is used, write the script in single quotes so shell expansion does not consume Perl variables like `$page`

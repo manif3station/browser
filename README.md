@@ -24,11 +24,13 @@ Without a shared browser skill, quick browser tasks usually fragment into shell 
 
 - `dashboard browser.get <url>`
 - `dashboard browser.post <url>`
+- `dashboard browser.png <url>`
 - JavaScript page-context scripting through `--script`
 - Perl controller scripting through `--playwright`, `--agent`, or `--flow`
 - jQuery injection through `--jquery`
 - interactive visible-browser takeover through `--ask` and `--askme`
 - HTML body, text body, status, final URL, and CAPTCHA detection in the output payload
+- screenshot capture with a printed PNG file path
 
 ## Developer Dashboard Feature Added
 
@@ -36,12 +38,14 @@ This skill adds:
 
 - the dotted command `dashboard browser.get`
 - the dotted command `dashboard browser.post`
+- the dotted command `dashboard browser.png`
 - a DD skill example that depends on `aptfile`, `brewfile`, `cpanfile`, and `package.json`
 
 ## Layout
 
 - `cli/get` GET entrypoint
 - `cli/post` POST entrypoint
+- `cli/png` screenshot entrypoint
 - `lib/Browser/CLI.pm` CLI parsing and JSON output
 - `lib/Browser/Runner.pm` Playwright execution
 - `aptfile`, `brewfile`, `package.json`, and `cpanfile` dependency declarations
@@ -81,6 +85,8 @@ Installed DD usage:
 dashboard browser.get https://example.com
 dashboard browser.get https://example.com --script 'return document.title'
 dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
+dashboard browser.png https://example.com
+dashboard browser.png https://example.com --file /tmp/example-shot
 dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 dashboard browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 dashboard browser.post https://example.com/form --data 'name=dashboard'
@@ -91,6 +97,41 @@ Direct local development:
 ```bash
 perl cli/get https://example.com
 perl cli/post https://example.com/form --data 'name=dashboard'
+perl cli/png https://example.com --file /tmp/example-shot
+```
+
+## Screenshot Usage
+
+`browser.png` captures a rendered page screenshot and prints the saved PNG path to stdout.
+
+If `--file` is provided without a `.png` suffix, the skill appends `.png` for the user:
+
+```bash
+dashboard browser.png https://example.com --file /tmp/example-shot
+```
+
+Output:
+
+```text
+/tmp/example-shot.png
+```
+
+If `--file` already ends in `.png`, the skill keeps that filename unchanged:
+
+```bash
+dashboard browser.png https://example.com --file /tmp/example-shot.png
+```
+
+If `--file` is omitted, the skill writes to a random tmp path and prints it:
+
+```bash
+dashboard browser.png https://example.com
+```
+
+Example output:
+
+```text
+/tmp/browser-a1b2c3d4e5f6a7b8.png
 ```
 
 ## Mode Selection

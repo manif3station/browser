@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.13 2026-04-24
+ - add `dashboard browser.png` to capture a rendered page screenshot
+ - support `--file` with automatic `.png` suffix normalization when the caller omitted it
+ - default screenshot output to a random `/tmp/browser-*.png` path and print the saved file path after capture
+
 0.12 2026-04-22
  - repair Node runtime self-healing so stale merged module trees do not leave `uuid` in an ESM-broken state for `playwright_server`
  - align runtime installation with DD's staged `npx` package.json install pattern and clear affected module directories before copying fresh installs into `$HOME/node_modules`

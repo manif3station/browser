@@ -21,6 +21,11 @@ sub main {
         return 2;
     }
 
+    if ( uc( $args{method} || q{} ) eq 'PNG' ) {
+        print {$output_fh} $result->{file}, "\n";
+        return 0;
+    }
+
     print {$output_fh} encode_json($result), "\n";
     return 0;
 }
@@ -29,7 +34,7 @@ sub execute {
     my (%args) = @_;
     my @argv = @{ $args{argv} || [] };
     my $method = uc( $args{method} || q{} );
-    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST';
+    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG';
 
     my %options = (
         browser    => 'chrome',
@@ -49,6 +54,7 @@ sub execute {
         'askme!'       => \$options{askme},
         'wait-until=s' => \$options{wait_until},
         'timeout-ms=i' => \$options{timeout_ms},
+        'file=s'       => \$options{file},
     ) or die "Invalid options";
 
     my $url = shift @argv or die "Missing URL";
@@ -71,6 +77,7 @@ sub execute {
         interactive => $interactive,
         wait_until  => $options{wait_until},
         timeout_ms  => $options{timeout_ms},
+        file        => $options{file},
         input_fh    => $args{input_fh} || \*STDIN,
         prompt_fh   => $args{error_fh} || \*STDERR,
     );

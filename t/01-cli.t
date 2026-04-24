@@ -28,6 +28,7 @@ use Browser::CLI;
             interactive   => $args{interactive},
             wait_until    => $args{wait_until},
             timeout_ms    => $args{timeout_ms},
+            file          => $args{file},
         };
     }
 }
@@ -96,6 +97,14 @@ $interactive_result = Browser::CLI::execute(
     runner => TestRunner->new(),
 );
 is( $interactive_result->{wait_until}, 'load', 'execute forwards wait-until' );
+
+my $png_result = Browser::CLI::execute(
+    method => 'PNG',
+    argv   => [ 'https://example.test', '--file', '/tmp/shot' ],
+    runner => TestRunner->new(),
+);
+is( $png_result->{method}, 'PNG', 'execute forwards the PNG request method' );
+is( $png_result->{file}, '/tmp/shot', 'execute forwards the screenshot file option' );
 
 my $stdout = q{};
 open my $stdout_fh, '>', \$stdout or die "Unable to open stdout scalar: $!";
@@ -179,6 +188,21 @@ $exit = Browser::CLI::main(
 is( $exit, 0, 'main accepts wait-until arguments' );
 $payload = decode_json($stdout);
 is( $payload->{wait_until}, 'domcontentloaded', 'main prints wait-until in the runner result' );
+
+$stdout = q{};
+$stderr = q{};
+open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for png mode: $!";
+open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for png mode: $!";
+$exit = Browser::CLI::main(
+    method    => 'PNG',
+    argv      => [ 'https://example.test', '--file', '/tmp/browser-shot' ],
+    runner    => TestRunner->new(),
+    output_fh => $stdout_fh,
+    error_fh  => $stderr_fh,
+);
+is( $exit, 0, 'main accepts png mode arguments' );
+is( $stdout, "/tmp/browser-shot\n", 'main prints only the screenshot path for png mode' );
+is( $stderr, q{}, 'main keeps stderr empty for png mode success' );
 
 $stdout = q{};
 $stderr = q{};

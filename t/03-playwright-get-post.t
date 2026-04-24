@@ -70,6 +70,26 @@ eval {
     ok( !$post_payload->{is_captcha}, 'browser.post does not mark normal pages as captcha pages' );
     is( $post_payload->{script_result}{heading}, 'Posted', 'browser.post loads the response body into the page for scripting' );
     is( $post_payload->{script_result}{status}, 200, 'browser.post exposes response metadata in the page context' );
+
+    my $tmp_dir = _temp_dir();
+    my $png_path = "$tmp_dir/browser-shot";
+    my $png_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/png http://127.0.0.1:$port/get --file '$png_path' 2>&1};
+    my $png_exit = $? >> 8;
+    is( $png_exit, 0, "browser.png exits cleanly\n$png_output" );
+    chomp $png_output;
+    is( $png_output, "$png_path.png", 'browser.png appends .png when the caller omitted it' );
+    ok( -f "$png_path.png", 'browser.png writes the requested screenshot file' );
+    ok( -s "$png_path.png", 'browser.png writes a non-empty screenshot file' );
+
+    my $tmp_default = _temp_dir();
+    local $ENV{TMPDIR} = $tmp_default;
+    my $default_png_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" TMPDIR="$tmp_default" $^X cli/png http://127.0.0.1:$port/get 2>&1};
+    my $default_png_exit = $? >> 8;
+    is( $default_png_exit, 0, "browser.png default tmp path exits cleanly\n$default_png_output" );
+    chomp $default_png_output;
+    like( $default_png_output, qr{\A$tmp_default/browser-[A-Za-z0-9_.-]+\.png\z}, 'browser.png prints the generated tmp file path when --file is omitted' );
+    ok( -f $default_png_output, 'browser.png writes the generated tmp screenshot file' );
+    ok( -s $default_png_output, 'browser.png generated tmp screenshot is non-empty' );
 };
 my $error = $@;
 
@@ -189,4 +209,9 @@ sub _find_command {
         return $path if $path;
     }
     return;
+}
+
+sub _temp_dir {
+    require File::Temp;
+    return File::Temp::tempdir( CLEANUP => 1 );
 }

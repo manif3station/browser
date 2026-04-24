@@ -6,7 +6,7 @@ use warnings;
 use Cwd qw(getcwd);
 use Digest::SHA qw(sha256_hex);
 use File::Basename qw(dirname);
-use File::Path qw(remove_tree);
+use File::Path qw(make_path remove_tree);
 use File::Spec;
 use File::Temp qw(tempdir);
 use JSON::PP qw(encode_json);
@@ -19,7 +19,7 @@ sub new {
 sub request {
     my ( $self, %args ) = @_;
     my $method = uc( $args{method} || q{} );
-    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST';
+    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG';
 
     my $playwright = $self->{playwright_factory}
       ? $self->{playwright_factory}->(%args)
@@ -32,7 +32,9 @@ sub request {
     eval {
         $result = $method eq 'GET'
           ? _run_get( $page, browser => $browser, playwright => $playwright, %args )
-          : _run_post( $page, browser => $browser, playwright => $playwright, %args );
+          : $method eq 'POST'
+          ? _run_post( $page, browser => $browser, playwright => $playwright, %args )
+          : _run_png( $page, browser => $browser, playwright => $playwright, %args );
         1;
     } or do {
         my $error = $@ || 'Unknown browser skill error';
@@ -340,6 +342,18 @@ sub _find_in_path {
     return;
 }
 
+sub _screenshot_path {
+    my ($requested) = @_;
+    if ( defined $requested && $requested ne q{} ) {
+        return $requested if $requested =~ /\.png\z/i;
+        return $requested . '.png';
+    }
+
+    my $tmp = File::Spec->tmpdir();
+    my $random = substr sha256_hex( join q{:}, time(), $$, rand(), {} ), 0, 16;
+    return File::Spec->catfile( $tmp, "browser-$random.png" );
+}
+
 sub _skill_root {
     return $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} if $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT};
     return getcwd() if -d File::Spec->catdir( getcwd(), 'cli' ) && -d File::Spec->catdir( getcwd(), 'lib' );
@@ -483,6 +497,32 @@ sub _run_post {
     );
     $result->{script_result} = $script_result if defined $args{script};
     return $result;
+}
+
+sub _run_png {
+    my ( $page, %args ) = @_;
+    my $response = $page->goto( $args{url}, _goto_options(%args) );
+    _await_user(%args) if $args{interactive};
+
+    my $file = _screenshot_path( $args{file} );
+    my $dir = dirname($file);
+    make_path($dir) if defined $dir && $dir ne q{} && !-d $dir;
+
+    $page->screenshot(
+        {
+            path     => $file,
+            fullPage => JSON::PP::true,
+        }
+    );
+
+    return {
+        method        => 'PNG',
+        requested_url => $args{url},
+        final_url     => $page->url(),
+        status        => $response ? $response->status() : undef,
+        title         => $page->title(),
+        file          => $file,
+    };
 }
 
 sub _run_script {
