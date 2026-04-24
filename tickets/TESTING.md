@@ -42,6 +42,11 @@ Latest covered result for `DD-031`:
 - `lib/Browser/CLI.pm` `100.0%` statement, `100.0%` subroutine
 - `lib/Browser/Runner.pm` `100.0%` statement, `100.0%` subroutine
 
+Latest covered result for `DD-032`:
+
+- `lib/Browser/CLI.pm` `100.0%` statement, `100.0%` subroutine
+- `lib/Browser/Runner.pm` `100.0%` statement, `100.0%` subroutine
+
 ## Direct Host Proof
 
 Run from the skill repository:
@@ -55,6 +60,7 @@ Observed result:
 
 - stdout printed `/tmp/browser-proof.png`
 - the file existed and was non-empty
+- installed browser-path validation no longer accepted a relative `bin/chrome` launcher on the host path
 
 ## Latest DD Source Proof
 
@@ -84,6 +90,7 @@ Observed result:
 - stdout printed `/tmp/browser-proof.png` through the DD command path
 - the file existed and was non-empty
 - the skill started correctly without the earlier `uuid` ESM failure
+- the fixed source path no longer failed on a relative `bin/chrome` launcher
 
 ## Installed DD Proof
 
@@ -98,6 +105,7 @@ Observed result:
 
 - stdout printed `$tmp/installed-proof.png`
 - the file existed and was non-empty
+- the installed DD command no longer failed with the earlier `Protocol error (Browser.getVersion)` launcher regression
 
 ## Result
 
@@ -112,6 +120,8 @@ Observed result:
 - `browser.png` appends `.png` when `--file` omitted the suffix
 - `browser.png` preserves an existing `.png` suffix without duplication
 - `browser.png` defaults to a random `/tmp/browser-*.png` path when `--file` is omitted
+- browser binary selection now rejects relative PATH hits such as `bin/chrome`
+- browser binary selection now ignores broken wrapper scripts that fail a quiet launchability check
 - `browser.get` returns the rendered HTML body in its JSON payload
 - browser responses include `content_type`, `body_text`, and `is_captcha`
 - `browser.get` supports `--ask` and `--askme` for visible interactive takeover

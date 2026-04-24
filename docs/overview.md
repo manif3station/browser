@@ -29,4 +29,5 @@ The skill ships:
 - `lib/Browser/Runner.pm` for Playwright execution
 - dependency files for DD skill installation on Debian-family and macOS hosts
 - a `package.json` file for DD-managed Node dependency installation into `$HOME`
+- browser-binary validation so broken wrapper paths are not handed to Playwright
 - skill-local tests, docs, ticket records, versioning, and changelog files

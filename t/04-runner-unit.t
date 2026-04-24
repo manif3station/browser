@@ -715,6 +715,16 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 }
 
 {
+    no warnings 'redefine';
+    local *Browser::Runner::_validated_browser_path = sub { return };
+    my %launch = Browser::Runner::_launch_options(
+        browser  => 'chrome',
+        headless => 1,
+    );
+    ok( !exists $launch{executablePath}, 'launch options omit executablePath when no validated browser path exists' );
+}
+
+{
     my $temp_root = tempdir( CLEANUP => 1 );
     my $bin_dir = File::Spec->catdir( $temp_root, 'bin' );
     make_path($bin_dir);
@@ -731,6 +741,72 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
         headless => 1,
     );
     is( $launch{executablePath}, $chromium_path, 'launch options use the detected system chromium path when available' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $bin_dir = File::Spec->catdir( $temp_root, 'bin' );
+    my $cwd = Cwd::getcwd();
+    make_path($bin_dir);
+    open my $chrome_fh, '>', File::Spec->catfile( $bin_dir, 'chrome' ) or die "Unable to write relative fake chrome binary: $!";
+    print {$chrome_fh} "#!/bin/sh\nexit 0\n";
+    close $chrome_fh or die "Unable to close relative fake chrome binary: $!";
+    chmod 0755, File::Spec->catfile( $bin_dir, 'chrome' ) or die "Unable to chmod relative fake chrome binary: $!";
+    chdir $temp_root or die "Unable to chdir to temp root for relative-path browser test: $!";
+    local $ENV{CHROMIUM_BIN};
+    local $ENV{PATH} = 'bin';
+    ok( !defined Browser::Runner::_default_chromium_bin(), 'default_chromium_bin rejects relative PATH hits such as bin/chrome' );
+    chdir $cwd or die "Unable to restore cwd after relative-path browser test: $!";
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $broken = File::Spec->catfile( $temp_root, 'broken-chrome' );
+    open my $broken_fh, '>', $broken or die "Unable to write broken chrome wrapper: $!";
+    print {$broken_fh} "#!/bin/sh\nexit 127\n";
+    close $broken_fh or die "Unable to close broken chrome wrapper: $!";
+    chmod 0755, $broken or die "Unable to chmod broken chrome wrapper: $!";
+    ok( !Browser::Runner::_browser_path_is_usable($broken), 'browser_path_is_usable rejects wrappers that fail a launchability check' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $good = File::Spec->catfile( $temp_root, 'good-chrome' );
+    open my $good_fh, '>', $good or die "Unable to write good chrome wrapper: $!";
+    print {$good_fh} "#!/bin/sh\nexit 0\n";
+    close $good_fh or die "Unable to close good chrome wrapper: $!";
+    chmod 0755, $good or die "Unable to chmod good chrome wrapper: $!";
+    ok( Browser::Runner::_browser_path_is_usable($good), 'browser_path_is_usable accepts launchable absolute browser paths' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $good = File::Spec->catfile( $temp_root, 'configured-chrome' );
+    open my $good_fh, '>', $good or die "Unable to write configured chrome wrapper: $!";
+    print {$good_fh} "#!/bin/sh\nexit 0\n";
+    close $good_fh or die "Unable to close configured chrome wrapper: $!";
+    chmod 0755, $good or die "Unable to chmod configured chrome wrapper: $!";
+    local $ENV{CHROMIUM_BIN} = $good;
+    is( Browser::Runner::_validated_browser_path(), $good, 'validated_browser_path accepts a configured absolute browser path that passes the usability check' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    my $broken = File::Spec->catfile( $temp_root, 'configured-broken-chrome' );
+    open my $broken_fh, '>', $broken or die "Unable to write broken configured chrome wrapper: $!";
+    print {$broken_fh} "#!/bin/sh\nexit 127\n";
+    close $broken_fh or die "Unable to close broken configured chrome wrapper: $!";
+    chmod 0755, $broken or die "Unable to chmod broken configured chrome wrapper: $!";
+    local $ENV{CHROMIUM_BIN} = $broken;
+    ok( !defined Browser::Runner::_validated_browser_path(), 'validated_browser_path rejects a configured browser path that fails the usability check' );
+}
+
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    local $ENV{HOME} = $temp_root;
+    my @candidates = Browser::Runner::_browser_candidates();
+    like( join( "\n", @candidates ), qr/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/, 'browser_candidates includes macOS Chrome app paths for validation' );
+    like( join( "\n", @candidates ), qr/\Q$temp_root\E\/Applications\/Chromium\.app\/Contents\/MacOS\/Chromium/, 'browser_candidates includes home-local macOS Chromium app paths for validation' );
 }
 
 {

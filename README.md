@@ -71,6 +71,8 @@ dashboard skills install git@github.mf:manif3station/browser.git
 
 Developer Dashboard installs the skill's `package.json` runtime into `$HOME` using the DD Node dependency path. The skill also verifies that installed module versions still satisfy `package.json`, and if they do not, it stages a fresh `npx --yes npm install ...` under the DD cache and replaces the stale module trees before launching Playwright.
 
+Before launch, the skill also validates any configured or discovered browser binary path. Relative PATH hits such as `bin/chrome` are rejected, and unusable wrapper scripts are ignored instead of being passed through to Playwright as `executablePath`.
+
 For direct local development outside DD, you can preinstall the Node-side runtime with:
 
 ```bash

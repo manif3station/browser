@@ -1,5 +1,10 @@
 Revision history for browser
 
+0.14 2026-04-24
+ - reject relative PATH hits such as `bin/chrome` when selecting a browser binary for Playwright
+ - validate configured and discovered browser binaries with a quiet launchability check before passing them as `executablePath`
+ - add fallback candidate handling for common macOS app bundle browser locations without trusting broken wrappers
+
 0.13 2026-04-24
  - add `dashboard browser.png` to capture a rendered page screenshot
  - support `--file` with automatic `.png` suffix normalization when the caller omitted it

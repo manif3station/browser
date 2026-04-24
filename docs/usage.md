@@ -55,6 +55,8 @@ npm install --prefix "$HOME" <skill-root>
 
 The skill also checks that the installed `$HOME/node_modules` versions still satisfy `package.json`. If the installed tree is stale or mismatched, it stages a fresh `npx --yes npm install ...` in the DD cache and replaces the affected module directories before launching Playwright.
 
+The skill only passes `executablePath` to Playwright when the browser path is validated as an absolute, launchable binary. Relative PATH wrappers such as `bin/chrome` are ignored.
+
 For direct local development outside DD, use:
 
 ```bash
@@ -210,6 +212,7 @@ This is intended as a practical CLI signal, not a perfect classifier.
 - if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill stages and installs `playwright`, `express`, `jquery`, and `uuid` into `$HOME/node_modules`
 - if `$HOME/node_modules` contains stale module trees from an older install, the skill clears the affected package directories and reinstalls them from the current `package.json`
 - if `CHROMIUM_BIN` is not set, the skill looks for a usable system Chromium or Chrome binary on `PATH`
+- if `CHROMIUM_BIN` points at a broken wrapper or non-launchable binary, the skill ignores it instead of passing it through to Playwright
 - if the page HTML is large, `browser.get` returns that full HTML in the JSON payload
 - if `browser.png` is called without `--file`, the generated filename is random and will vary between runs
 - if `--ask` or `--askme` is used on a host without a display server, the headed browser launch can fail until the command is run in a desktop-capable environment
