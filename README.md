@@ -79,6 +79,12 @@ For direct local development outside DD, you can preinstall the Node-side runtim
 npm install --prefix "$HOME" .
 ```
 
+## License
+
+`browser` is released under the MIT License.
+
+See [LICENSE](LICENSE).
+
 ## CLI Usage
 
 Installed DD usage:

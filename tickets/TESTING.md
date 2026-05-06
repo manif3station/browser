@@ -47,6 +47,11 @@ Latest covered result for `DD-032`:
 - `lib/Browser/CLI.pm` `100.0%` statement, `100.0%` subroutine
 - `lib/Browser/Runner.pm` `100.0%` statement, `100.0%` subroutine
 
+Latest covered result for `DD-033`:
+
+- `lib/Browser/CLI.pm` `100.0%` statement, `100.0%` subroutine
+- `lib/Browser/Runner.pm` `100.0%` statement, `100.0%` subroutine
+
 ## Direct Host Proof
 
 Run from the skill repository:
@@ -122,6 +127,7 @@ Observed result:
 - `browser.png` defaults to a random `/tmp/browser-*.png` path when `--file` is omitted
 - browser binary selection now rejects relative PATH hits such as `bin/chrome`
 - browser binary selection now ignores broken wrapper scripts that fail a quiet launchability check
+- the skill now ships with an explicit MIT `LICENSE` file and README license section
 - `browser.get` returns the rendered HTML body in its JSON payload
 - browser responses include `content_type`, `body_text`, and `is_captcha`
 - `browser.get` supports `--ask` and `--askme` for visible interactive takeover

@@ -1,5 +1,9 @@
 Revision history for browser
 
+0.15 2026-05-06
+ - add an explicit MIT license to the `browser` skill
+ - document the MIT license in the README
+
 0.14 2026-04-24
  - reject relative PATH hits such as `bin/chrome` when selecting a browser binary for Playwright
  - validate configured and discovered browser binaries with a quiet launchability check before passing them as `executablePath`

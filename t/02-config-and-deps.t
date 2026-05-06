@@ -17,7 +17,7 @@ my $aptfile = do {
     local $/;
     <$fh>;
 };
-like( $aptfile, qr/^nodejs$/m, 'aptfile includes nodejs' );
+like( $aptfile, qr/^chromium$/m, 'aptfile includes chromium' );
 
 my $brewfile = do {
     open my $fh, '<', 'brewfile' or die "Unable to read brewfile: $!";
