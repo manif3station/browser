@@ -57,16 +57,10 @@ This skill adds:
 
 ## Installation
 
-Install through Developer Dashboard:
+Install the skill into Developer Dashboard by repo name:
 
 ```bash
-dashboard skills install <git-url-to-browser-skill>
-```
-
-Example:
-
-```bash
-dashboard skills install git@github.mf:manif3station/browser.git
+dashboard skills install browser
 ```
 
 Developer Dashboard installs the skill's `package.json` runtime into `$HOME` using the DD Node dependency path. The skill also verifies that installed module versions still satisfy `package.json`, and if they do not, it stages a fresh `npx --yes npm install ...` under the DD cache and replaces the stale module trees before launching Playwright.
