@@ -47,7 +47,9 @@ This skill adds:
 - `cli/post` POST entrypoint
 - `cli/png` screenshot entrypoint
 - `lib/Browser/CLI.pm` CLI parsing and JSON output
-- `lib/Browser/Runner.pm` Playwright execution
+- `lib/Browser/Runner.pm` Playwright execution orchestration (GET/POST/PNG, controller mode)
+- `lib/Browser/Runner/NodeRuntime.pm` Node dependency install/version-satisfaction and the shared install lock
+- `lib/Browser/Runner/BrowserPath.pm` browser binary discovery/validation and Playwright launch options
 - `aptfile`, `brewfile`, `package.json`, and `cpanfile` dependency declarations
 - `t/` tests
 - `docs/` skill docs
@@ -63,9 +65,9 @@ Install the skill into Developer Dashboard by repo name:
 dashboard skills install browser
 ```
 
-Developer Dashboard installs the skill's `package.json` runtime into `$HOME` using the DD Node dependency path. The skill also verifies that installed module versions still satisfy `package.json`, and if they do not, it stages a fresh `npx --yes npm install ...` under the DD cache and replaces the stale module trees before launching Playwright.
+Developer Dashboard installs the skill's `package.json` runtime into `$HOME` using the DD Node dependency path (`NODE_PATH` is joined with the platform's own path-list separator - `:` on Unix, `;` on Windows - never a hardcoded one). The stale-check-and-install sequence for that shared `$HOME/node_modules` tree holds an exclusive file lock for its whole duration, so two concurrent `browser.get`/`browser.post`/`browser.png` invocations that both find the runtime stale cannot race each other's clear-and-copy and corrupt the shared tree - the second invocation simply waits for the first to finish. The skill also verifies that installed module versions still satisfy `package.json`, and if they do not, it stages a fresh `npx --yes npm install ...` under the DD cache and replaces the stale module trees before launching Playwright. A `^0.y.z` dependency spec follows npm's own caret rules for pre-1.0 versions: `^0.0.z` only ever matches that exact patch version, and `^0.y.z` (y>0) matches any patch within that same minor version - neither accepts a different minor or major version the way a `^1.y.z` spec would. The skill's own `package.json` is read from disk and JSON-decoded at most once per stale-runtime check (cached by path+mtime), rather than separately for the fingerprint, the install spec list, and the installed-version comparison.
 
-Before launch, the skill also validates any configured or discovered browser binary path. Relative PATH hits such as `bin/chrome` are rejected, and unusable wrapper scripts are ignored instead of being passed through to Playwright as `executablePath`.
+Before launch, the skill also validates any configured or discovered browser binary path. Relative PATH hits such as `bin/chrome` are rejected, and unusable wrapper scripts are ignored instead of being passed through to Playwright as `executablePath`. PATH auto-detection splits on the platform's own path-list separator and, on Windows, also tries a `.exe` suffix when the bare command name isn't found. This `CHROMIUM_BIN`/auto-detected path is only ever applied for `--browser chrome` (the default) or `--browser chromium` - requesting `--browser firefox` or `--browser webkit` always launches Playwright's own bundled firefox/webkit binary and never inherits a configured Chromium path.
 
 For direct local development outside DD, you can preinstall the Node-side runtime with:
 
@@ -93,6 +95,8 @@ dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 dashboard browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 dashboard browser.post https://example.com/form --data 'name=dashboard'
 ```
+
+`--data` is refused on `browser.get`/`browser.png` - only `browser.post` reads it. Likewise, `--wait-until`/`--timeout-ms` are refused on `browser.post` - only `browser.get`/`browser.png` read them.
 
 Direct local development:
 
@@ -387,8 +391,8 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 2. If Playwright or Node dependencies are missing, the command fails until DD installs the skill dependencies.
 3. If the target host is unavailable, the Playwright run exits non-zero.
 4. If the page is large, `browser.get` returns a large JSON payload because it includes the rendered HTML body.
-5. If the response looks like a challenge page, `is_captcha` is set to true and `body_text` provides a readable summary.
-6. If a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect.
+5. If the response looks like a challenge page, `is_captcha` is set to true and `body_text` provides a readable summary. Detection is a case-insensitive substring match for one of four reCAPTCHA/hCaptcha markers (`g-recaptcha`, `h-captcha`, `recaptcha/api`, `hcaptcha.com`) in the page's HTML, or a challenge-page title (e.g. "unusual traffic from your computer network") - not any mention of "captcha" in the page's rendered text, so an ordinary page that merely discusses captchas without one of those markers is not flagged.
+6. If a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect. A response body that is already HTML - `text/html`/`application/xhtml+xml` content-type, a `<!doctype html>`/`<html>` wrapper, or simply a tag-shaped fragment like `<div>...</div>` with no wrapper at all - is set as real DOM instead of being escaped.
 7. If `--ask` or `--askme` is used, the command opens a visible browser and waits for terminal confirmation before continuing.
 8. If `--ask` is used, the initial navigation defaults to `load` with no timeout; add `--timeout-ms` if you want a bounded initial wait.
 9. If `--ask` is used on a host without a display server, the headed browser launch can fail until the command runs in a desktop-capable environment.
@@ -398,6 +402,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 13. If a target site keeps long-lived network activity open, avoid forcing `networkidle` where a simple `load` or explicit sleep is enough.
 14. If a site needs several intermediate clicks before the real destination appears, inspect controls first rather than guessing the final selector.
 15. If the first page after login differs by account state, build the script to detect candidate destinations dynamically.
+16. A URL argument is only refused as missing when it is truly absent or an empty string - a URL that happens to be the single character `0` is accepted and used as-is, not rejected by Perl truthiness.
 
 ## Documentation
 
@@ -409,5 +414,9 @@ See:
 - `docs/changes/2026-04-22-controller-mode.md`
 - `docs/changes/2026-04-22-ask-timeout.md`
 - `docs/changes/2026-04-22-example-library.md`
+- `docs/changes/2026-04-22-node-runtime-repair.md`
 - `docs/changes/2026-04-22-platform-examples.md`
 - `docs/changes/2026-04-22-proven-examples.md`
+- `docs/changes/2026-04-24-browser-binary-validation.md`
+- `docs/changes/2026-04-24-browser-png.md`
+- `docs/changes/2026-05-06-mit-license.md`

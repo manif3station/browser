@@ -16,8 +16,7 @@ sub main {
 
     my $result = eval { execute(%args) };
     if ( my $error = $@ ) {
-        chomp $error;
-        print {$error_fh} "$error\n";
+        print {$error_fh} _sanitize_error($error), "\n";
         return 2;
     }
 
@@ -28,6 +27,13 @@ sub main {
 
     print {$output_fh} encode_json($result), "\n";
     return 0;
+}
+
+sub _sanitize_error {
+    my ($error) = @_;
+    chomp $error;
+    $error =~ s{\s+at\s+\S+\s+line\s+\d+\.\z}{};
+    return $error;
 }
 
 sub execute {
@@ -57,8 +63,18 @@ sub execute {
         'file=s'       => \$options{file},
     ) or die "Invalid options";
 
-    my $url = shift @argv or die "Missing URL";
+    my $url = shift @argv;
+    die "Missing URL" if !defined $url || $url eq q{};
     die "Unexpected arguments: @argv" if @argv;
+
+    die "--data is only read by browser.post - it has no effect on $method"
+      if defined $options{data} && $method ne 'POST';
+
+    die "--wait-until is only read by browser.get/browser.png - it has no effect on $method"
+      if defined $options{wait_until} && $method eq 'POST';
+
+    die "--timeout-ms is only read by browser.get/browser.png - it has no effect on $method"
+      if defined $options{timeout_ms} && $method eq 'POST';
 
     my $interactive = $options{ask} || $options{askme} ? 1 : 0;
     my $controller = $options{playwright} || $options{agent} || $options{flow} ? 1 : 0;

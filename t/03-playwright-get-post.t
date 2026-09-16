@@ -7,10 +7,10 @@ use Test::More;
 use Time::HiRes qw(sleep);
 
 my $node_bin = _find_command('node');
-my $chromium_bin = $ENV{CHROMIUM_BIN} || _find_command(qw(chromium chromium-browser google-chrome google-chrome-stable));
+my $chromium_bin = $ENV{CHROMIUM_BIN} || _find_command(qw(chromium chromium-browser google-chrome google-chrome-stable)) || q{};
 
-plan skip_all => 'Playwright integration test requires node and Chromium'
-  if !$node_bin || !$chromium_bin;
+plan skip_all => 'Playwright integration test requires node and a usable Chromium (configured, on PATH, or Playwright-bundled)'
+  if !$node_bin || ( !$chromium_bin && !_playwright_bundled_browser_installed() );
 
 my $port = _reserve_port();
 my $pid = fork();
@@ -200,6 +200,16 @@ sub _reserve_port {
     my $port = $socket->sockport;
     close $socket;
     return $port;
+}
+
+sub _playwright_bundled_browser_installed {
+    my $home = $ENV{HOME} || return 0;
+    my $cache_dir = "$home/.cache/ms-playwright";
+    return 0 if !-d $cache_dir;
+    opendir my $dh, $cache_dir or return 0;
+    my @entries = grep { /^chromium/ } readdir $dh;
+    closedir $dh;
+    return @entries ? 1 : 0;
 }
 
 sub _find_command {

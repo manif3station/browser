@@ -44,7 +44,7 @@ like( $package_json, qr/"jquery"\s*:/, 'package.json includes jquery' );
 like( $package_json, qr/"uuid"\s*:/, 'package.json includes uuid' );
 like( $package_json, qr/"uuid"\s*:\s*"\^11\.0\.0"/, 'package.json pins uuid to the CommonJS-compatible major used by DD' );
 
-my %launch = Browser::Runner::_launch_options(
+my %launch = Browser::Runner::BrowserPath::_launch_options(
     browser  => 'chrome',
     headless => 0,
 );

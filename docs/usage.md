@@ -194,12 +194,17 @@ Only the remaining examples in `README.md` are treated as proven examples.
 
 ## Captcha Detection
 
-The skill marks a response as captcha-like when the rendered page looks like a bot challenge, such as content that includes:
-
-- `captcha`
-- `recaptcha`
-- `unusual traffic`
-- `verify you are human`
+The skill marks a response as captcha-like only when the page's HTML
+(the current DOM for `browser.get`, or the response HTML being inspected
+for `browser.post`) contains one of four specific substrings associated
+with real reCAPTCHA/hCaptcha embeds (`g-recaptcha`, `h-captcha`,
+`recaptcha/api`, `hcaptcha.com`), or when the page **title** matches a
+challenge phrase (`captcha`, `unusual traffic`, `verify you are human`).
+It is a plain case-insensitive substring match, not markup validation,
+and it does not scan the page's visible rendered text (`body_text`) for a
+bare mention of "captcha" - an ordinary page whose body text merely
+discusses captchas, without one of those four markers actually present in
+the HTML, is not flagged.
 
 This is intended as a practical CLI signal, not a perfect classifier.
 

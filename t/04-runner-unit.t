@@ -107,12 +107,12 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     close $package_fh or die "Unable to close temp package.json: $!";
 
     is_deeply(
-        [ Browser::Runner::_package_json_dependency_specs($package_json) ],
+        [ Browser::Runner::NodeRuntime::_package_json_dependency_specs($package_json) ],
         [ 'express@^5.1.0', 'jquery@^3.7.1', 'uuid@^11.0.0', 'playwright@^1.55.1' ],
         'package_json_dependency_specs follows the DD dependency extraction order across dependency sections'
     );
     is_deeply(
-        { Browser::Runner::_package_json_dependency_map($package_json) },
+        { Browser::Runner::NodeRuntime::_package_json_dependency_map($package_json) },
         {
             express    => '^5.1.0',
             jquery     => '^3.7.1',
@@ -122,11 +122,11 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'package_json_dependency_map returns the merged runtime dependency map'
     );
 
-    my $fingerprint = Browser::Runner::_package_json_fingerprint($package_json);
+    my $fingerprint = Browser::Runner::NodeRuntime::_package_json_fingerprint($package_json);
     ok( $fingerprint, 'package_json_fingerprint returns a value for the runtime manifest' );
 
     ok(
-        !Browser::Runner::_node_runtime_is_current(
+        !Browser::Runner::NodeRuntime::_node_runtime_is_current(
             home_root    => $temp_root,
             package_json => $package_json,
             fingerprint  => $fingerprint,
@@ -134,12 +134,12 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'node runtime is stale when required node_modules and the runtime stamp are absent'
     );
 
-    for my $module ( Browser::Runner::_required_node_modules() ) {
+    for my $module ( Browser::Runner::NodeRuntime::_required_node_modules() ) {
         make_path( File::Spec->catdir( $temp_root, 'node_modules', $module ) );
     }
 
     ok(
-        !Browser::Runner::_node_runtime_is_current(
+        !Browser::Runner::NodeRuntime::_node_runtime_is_current(
             home_root    => $temp_root,
             package_json => $package_json,
             fingerprint  => $fingerprint,
@@ -162,7 +162,7 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     }
 
     ok(
-        Browser::Runner::_node_runtime_is_current(
+        Browser::Runner::NodeRuntime::_node_runtime_is_current(
             home_root    => $temp_root,
             package_json => $package_json,
             fingerprint  => $fingerprint,
@@ -170,17 +170,17 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'node runtime treats an already-installed dependency set that satisfies package.json as current even without the runtime stamp'
     );
 
-    Browser::Runner::_write_node_runtime_stamp(
+    Browser::Runner::NodeRuntime::_write_node_runtime_stamp(
         home_root   => $temp_root,
         fingerprint => $fingerprint,
     );
     is(
-        Browser::Runner::_read_node_runtime_stamp( home_root => $temp_root ),
+        Browser::Runner::NodeRuntime::_read_node_runtime_stamp( home_root => $temp_root ),
         $fingerprint,
         'node runtime stamp round-trips through the cache file'
     );
     ok(
-        Browser::Runner::_node_runtime_is_current(
+        Browser::Runner::NodeRuntime::_node_runtime_is_current(
             home_root    => $temp_root,
             package_json => $package_json,
             fingerprint  => $fingerprint,
@@ -188,14 +188,14 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'node runtime is current when required node_modules exist and the runtime stamp matches the package.json fingerprint'
     );
     ok(
-        !Browser::Runner::_installed_modules_satisfy_package_json(
+        !Browser::Runner::NodeRuntime::_installed_modules_satisfy_package_json(
             home_root    => $temp_root,
             package_json => File::Spec->catfile( $temp_root, 'missing-package.json' ),
         ),
         'installed_modules_satisfy_package_json is not called with a missing manifest in normal flow'
     ) if 0;
     is(
-        Browser::Runner::_installed_node_module_version(
+        Browser::Runner::NodeRuntime::_installed_node_module_version(
             home_root => $temp_root,
             module    => 'uuid',
         ),
@@ -203,21 +203,21 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'installed_node_module_version reads installed node module versions'
     );
     ok(
-        !defined Browser::Runner::_installed_node_module_version(
+        !defined Browser::Runner::NodeRuntime::_installed_node_module_version(
             home_root => $temp_root,
             module    => 'missing-module',
         ),
         'installed_node_module_version returns undef when the module metadata is absent'
     );
-    ok( Browser::Runner::_version_satisfies_spec( '11.1.0', '^11.0.0' ), 'version_satisfies_spec accepts compatible caret ranges' );
-    ok( !Browser::Runner::_version_satisfies_spec( '12.0.0', '^11.0.0' ), 'version_satisfies_spec rejects incompatible major versions' );
-    ok( Browser::Runner::_version_satisfies_spec( '3.7.1', '3.7.1' ), 'version_satisfies_spec accepts exact matches' );
-    ok( !Browser::Runner::_version_satisfies_spec( '3.7.0', '3.7.1' ), 'version_satisfies_spec rejects exact mismatches' );
-    ok( Browser::Runner::_version_satisfies_spec( '1.2.3', '*' ), 'version_satisfies_spec accepts wildcard specs' );
-    ok( Browser::Runner::_version_satisfies_spec( '1.2.3', 'latest' ), 'version_satisfies_spec accepts latest specs' );
-    ok( !Browser::Runner::_version_satisfies_spec( 'not-a-version', '^1.2.3' ), 'version_satisfies_spec rejects non-numeric installed versions' );
-    ok( !defined scalar Browser::Runner::_version_parts(undef), 'version_parts returns undef for missing versions' );
-    ok( !defined scalar Browser::Runner::_version_parts('not-a-version'), 'version_parts returns undef for non-numeric versions' );
+    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '11.1.0', '^11.0.0' ), 'version_satisfies_spec accepts compatible caret ranges' );
+    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( '12.0.0', '^11.0.0' ), 'version_satisfies_spec rejects incompatible major versions' );
+    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '3.7.1', '3.7.1' ), 'version_satisfies_spec accepts exact matches' );
+    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( '3.7.0', '3.7.1' ), 'version_satisfies_spec rejects exact mismatches' );
+    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3', '*' ), 'version_satisfies_spec accepts wildcard specs' );
+    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3', 'latest' ), 'version_satisfies_spec accepts latest specs' );
+    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( 'not-a-version', '^1.2.3' ), 'version_satisfies_spec rejects non-numeric installed versions' );
+    ok( !defined scalar Browser::Runner::NodeRuntime::_version_parts(undef), 'version_parts returns undef for missing versions' );
+    ok( !defined scalar Browser::Runner::NodeRuntime::_version_parts('not-a-version'), 'version_parts returns undef for non-numeric versions' );
     {
         my $tmp = tempdir( CLEANUP => 1 );
         local $ENV{TMPDIR} = $tmp;
@@ -227,12 +227,12 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         is( Browser::Runner::_screenshot_path('/tmp/example.png'), '/tmp/example.png', 'screenshot_path keeps an existing .png suffix unchanged' );
     }
     is(
-        Browser::Runner::_make_path_if_missing( File::Spec->catdir( $temp_root, 'node_modules' ) ),
+        Browser::Runner::NodeRuntime::_make_path_if_missing( File::Spec->catdir( $temp_root, 'node_modules' ) ),
         1,
         'make_path_if_missing is a no-op success when the target directory already exists'
     );
     ok(
-        Browser::Runner::_clear_installed_node_modules(
+        Browser::Runner::NodeRuntime::_clear_installed_node_modules(
             home_root    => $temp_root,
             package_json => $package_json,
         ),
@@ -258,7 +258,7 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     }
     unlink File::Spec->catfile( $temp_root, 'node_modules', 'uuid', 'package.json' ) or die "Unable to remove temp installed uuid package metadata: $!";
     ok(
-        !Browser::Runner::_installed_modules_satisfy_package_json(
+        !Browser::Runner::NodeRuntime::_installed_modules_satisfy_package_json(
             home_root    => $temp_root,
             package_json => $package_json,
         ),
@@ -269,7 +269,7 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     print {$reinstall_uuid_fh} qq|{"name":"uuid","version":"12.0.0"}\n|;
     close $reinstall_uuid_fh or die "Unable to close rewritten temp installed uuid package metadata: $!";
     ok(
-        !Browser::Runner::_installed_modules_satisfy_package_json(
+        !Browser::Runner::NodeRuntime::_installed_modules_satisfy_package_json(
             home_root    => $temp_root,
             package_json => $package_json,
         ),
@@ -705,7 +705,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 {
     local $ENV{CHROMIUM_BIN};
     local $ENV{PATH} = q{};
-    my %launch = Browser::Runner::_launch_options(
+    my %launch = Browser::Runner::BrowserPath::_launch_options(
         browser  => 'chromium',
         headless => 1,
     );
@@ -716,8 +716,8 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 
 {
     no warnings 'redefine';
-    local *Browser::Runner::_validated_browser_path = sub { return };
-    my %launch = Browser::Runner::_launch_options(
+    local *Browser::Runner::BrowserPath::_validated_browser_path = sub { return };
+    my %launch = Browser::Runner::BrowserPath::_launch_options(
         browser  => 'chrome',
         headless => 1,
     );
@@ -735,8 +735,8 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     chmod 0755, $chromium_path or die "Unable to chmod fake chromium binary: $!";
     local $ENV{CHROMIUM_BIN};
     local $ENV{PATH} = $bin_dir;
-    is( Browser::Runner::_default_chromium_bin(), $chromium_path, 'default_chromium_bin finds chromium from PATH when CHROMIUM_BIN is unset' );
-    my %launch = Browser::Runner::_launch_options(
+    is( Browser::Runner::BrowserPath::_default_chromium_bin(), $chromium_path, 'default_chromium_bin finds chromium from PATH when CHROMIUM_BIN is unset' );
+    my %launch = Browser::Runner::BrowserPath::_launch_options(
         browser  => 'chrome',
         headless => 1,
     );
@@ -755,7 +755,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     chdir $temp_root or die "Unable to chdir to temp root for relative-path browser test: $!";
     local $ENV{CHROMIUM_BIN};
     local $ENV{PATH} = 'bin';
-    ok( !defined Browser::Runner::_default_chromium_bin(), 'default_chromium_bin rejects relative PATH hits such as bin/chrome' );
+    ok( !defined Browser::Runner::BrowserPath::_default_chromium_bin(), 'default_chromium_bin rejects relative PATH hits such as bin/chrome' );
     chdir $cwd or die "Unable to restore cwd after relative-path browser test: $!";
 }
 
@@ -766,7 +766,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     print {$broken_fh} "#!/bin/sh\nexit 127\n";
     close $broken_fh or die "Unable to close broken chrome wrapper: $!";
     chmod 0755, $broken or die "Unable to chmod broken chrome wrapper: $!";
-    ok( !Browser::Runner::_browser_path_is_usable($broken), 'browser_path_is_usable rejects wrappers that fail a launchability check' );
+    ok( !Browser::Runner::BrowserPath::_browser_path_is_usable($broken), 'browser_path_is_usable rejects wrappers that fail a launchability check' );
 }
 
 {
@@ -776,7 +776,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     print {$good_fh} "#!/bin/sh\nexit 0\n";
     close $good_fh or die "Unable to close good chrome wrapper: $!";
     chmod 0755, $good or die "Unable to chmod good chrome wrapper: $!";
-    ok( Browser::Runner::_browser_path_is_usable($good), 'browser_path_is_usable accepts launchable absolute browser paths' );
+    ok( Browser::Runner::BrowserPath::_browser_path_is_usable($good), 'browser_path_is_usable accepts launchable absolute browser paths' );
 }
 
 {
@@ -787,7 +787,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     close $good_fh or die "Unable to close configured chrome wrapper: $!";
     chmod 0755, $good or die "Unable to chmod configured chrome wrapper: $!";
     local $ENV{CHROMIUM_BIN} = $good;
-    is( Browser::Runner::_validated_browser_path(), $good, 'validated_browser_path accepts a configured absolute browser path that passes the usability check' );
+    is( Browser::Runner::BrowserPath::_validated_browser_path(), $good, 'validated_browser_path accepts a configured absolute browser path that passes the usability check' );
 }
 
 {
@@ -798,20 +798,20 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     close $broken_fh or die "Unable to close broken configured chrome wrapper: $!";
     chmod 0755, $broken or die "Unable to chmod broken configured chrome wrapper: $!";
     local $ENV{CHROMIUM_BIN} = $broken;
-    ok( !defined Browser::Runner::_validated_browser_path(), 'validated_browser_path rejects a configured browser path that fails the usability check' );
+    ok( !defined Browser::Runner::BrowserPath::_validated_browser_path(), 'validated_browser_path rejects a configured browser path that fails the usability check' );
 }
 
 {
     my $temp_root = tempdir( CLEANUP => 1 );
     local $ENV{HOME} = $temp_root;
-    my @candidates = Browser::Runner::_browser_candidates();
+    my @candidates = Browser::Runner::BrowserPath::_browser_candidates();
     like( join( "\n", @candidates ), qr/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/, 'browser_candidates includes macOS Chrome app paths for validation' );
     like( join( "\n", @candidates ), qr/\Q$temp_root\E\/Applications\/Chromium\.app\/Contents\/MacOS\/Chromium/, 'browser_candidates includes home-local macOS Chromium app paths for validation' );
 }
 
 {
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = '/tmp/browser-skill-root';
-    is( Browser::Runner::_skill_root(), '/tmp/browser-skill-root', 'skill root prefers the DD skill root environment variable' );
+    is( Browser::Runner::NodeRuntime::_skill_root(), '/tmp/browser-skill-root', 'skill root prefers the DD skill root environment variable' );
 }
 
 {
@@ -820,7 +820,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     make_path( File::Spec->catdir( $temp_root, 'lib' ) );
     my $cwd = Cwd::getcwd();
     chdir $temp_root or die "Unable to chdir to temp root: $!";
-    is( Browser::Runner::_skill_root(), $temp_root, 'skill root falls back to the current skill repo during local development' );
+    is( Browser::Runner::NodeRuntime::_skill_root(), $temp_root, 'skill root falls back to the current skill repo during local development' );
     chdir $cwd or die "Unable to restore cwd: $!";
 }
 
@@ -829,7 +829,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     my $temp_root = tempdir( CLEANUP => 1 );
     my $cwd = Cwd::getcwd();
     chdir $temp_root or die "Unable to chdir to fallback temp root: $!";
-    like( Browser::Runner::_skill_root(), qr/(?:\.|skills\/browser)\z/, 'skill root can fall back to the module path' );
+    like( Browser::Runner::NodeRuntime::_skill_root(), qr/(?:\.|skills\/browser)\z/, 'skill root can fall back to the module path' );
     chdir $cwd or die "Unable to restore cwd after module-path fallback test: $!";
 }
 
@@ -867,7 +867,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
     local $ENV{HOME} = $temp_root;
     local $ENV{NODE_PATH} = q{};
-    my $runtime = Browser::Runner::_ensure_node_runtime();
+    my $runtime = Browser::Runner::NodeRuntime::_ensure_node_runtime();
     like( $runtime, qr/node_modules\z/, 'ensure_node_runtime returns the home node_modules path' );
     like( $ENV{NODE_PATH}, qr/node_modules/, 'ensure_node_runtime prepends the runtime node_modules path' );
 }
@@ -893,7 +893,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 }
 |;
     close $package_fh or die "Unable to close temp package.json: $!";
-    local *Browser::Runner::_run_quiet_command = sub {
+    local *Browser::Runner::NodeRuntime::_run_quiet_command = sub {
         my (@command) = @_;
         if ( $command[0] eq 'npx' ) {
             like( join( ' ', @command ), qr/^npx --yes npm install /, 'ensure_node_runtime stages node dependencies through npx-wrapped npm' );
@@ -934,12 +934,12 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
         }
         die "Unexpected quiet runtime command: @command";
     };
-    local *Browser::Runner::_write_node_runtime_stamp = sub {
+    local *Browser::Runner::NodeRuntime::_write_node_runtime_stamp = sub {
         my (%args) = @_;
         ok( $args{fingerprint}, 'ensure_node_runtime writes the runtime stamp after staged install' );
         return 0;
     };
-    Browser::Runner::_ensure_node_runtime();
+    Browser::Runner::NodeRuntime::_ensure_node_runtime();
 }
 
 {
@@ -949,7 +949,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     print {$empty_fh} qq|{"name":"empty-browser","version":"0.01.0"}\n|;
     close $empty_fh or die "Unable to close empty package.json: $!";
     is(
-        Browser::Runner::_install_node_runtime(
+        Browser::Runner::NodeRuntime::_install_node_runtime(
             home_root    => $temp_root,
             package_json => $empty_package_json,
         ),
@@ -973,9 +973,9 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     close $broken_fh or die "Unable to close broken package.json: $!";
     my $cwd = Cwd::getcwd();
     no warnings 'redefine';
-    local *Browser::Runner::_run_quiet_command = sub { die "simulated staged npm failure\n" };
+    local *Browser::Runner::NodeRuntime::_run_quiet_command = sub { die "simulated staged npm failure\n" };
     eval {
-        Browser::Runner::_install_node_runtime(
+        Browser::Runner::NodeRuntime::_install_node_runtime(
             home_root    => $temp_root,
             package_json => $package_json,
         );
@@ -988,7 +988,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     my $temp_root = tempdir( CLEANUP => 1 );
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
     local $ENV{HOME};
-    eval { Browser::Runner::_ensure_node_runtime() };
+    eval { Browser::Runner::NodeRuntime::_ensure_node_runtime() };
     like( $@, qr/HOME is required/, '_ensure_node_runtime requires HOME for DD-style package.json installs' );
 }
 
@@ -996,37 +996,19 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     my $temp_root = tempdir( CLEANUP => 1 );
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
     local $ENV{HOME} = $temp_root;
-    eval { Browser::Runner::_ensure_node_runtime() };
+    eval { Browser::Runner::NodeRuntime::_ensure_node_runtime() };
     like( $@, qr/Missing package\.json/, '_ensure_node_runtime requires package.json under the skill root' );
 }
 
-{
-    my $temp_root = tempdir( CLEANUP => 1 );
-    my $exit = Browser::Runner::_run_in_dir( $temp_root, 'pwd' );
-    is( $exit, 0, '_run_in_dir returns zero for a successful command' );
-}
-
-eval { Browser::Runner::_run_in_dir( '/definitely/missing/path', 'pwd' ) };
-like( $@, qr/Unable to chdir/, '_run_in_dir reports bad working directories' );
-
-eval { Browser::Runner::_run_in_dir( tempdir( CLEANUP => 1 ), 'false' ) };
-like( $@, qr/Command failed/, '_run_in_dir reports failed commands' );
-
-eval { Browser::Runner::_run_command('false') };
-like( $@, qr/Command failed/, '_run_command reports failed commands' );
-
-my $command_exit = Browser::Runner::_run_command('true');
-is( $command_exit, 0, '_run_command returns zero for a successful command' );
-
-eval { Browser::Runner::_run_quiet_command('false') };
+eval { Browser::Runner::NodeRuntime::_run_quiet_command('false') };
 like( $@, qr/Command failed/, '_run_quiet_command reports failed commands' );
 
-my $quiet_command_exit = Browser::Runner::_run_quiet_command('true');
+my $quiet_command_exit = Browser::Runner::NodeRuntime::_run_quiet_command('true');
 is( $quiet_command_exit, 0, '_run_quiet_command returns zero for a successful command' );
 
 {
     no warnings 'redefine';
-    local *Browser::Runner::_ensure_node_runtime = sub { return '/tmp/browser-node'; };
+    local *Browser::Runner::NodeRuntime::_ensure_node_runtime = sub { return '/tmp/browser-node'; };
     local $INC{'Playwright.pm'} = __FILE__;
     {
         package Playwright;

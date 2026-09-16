@@ -1,5 +1,31 @@
 Revision history for browser
 
+0.19 2026-09-16
+ - fix `browser.get`/`browser.post`/`browser.png` wrongly refusing a URL argument of the literal string "0" as Missing URL, because the CLI's presence check used Perl truthiness instead of definedness/emptiness (D2B-025)
+
+0.18 2026-09-16
+ - stop reading and JSON-decoding the skill's own package.json up to 4 separate times within one stale-runtime check; it is now cached by path+mtime and read at most once per _node_runtime_is_current call (D2B-024)
+
+0.17 2026-09-16
+ - fix docs/usage.md's and README.md's Captcha Detection descriptions, which described a pre-D2B-009 detection shape and then, after a first pass, still overstated the real check as markup/widget validation instead of the plain 4-marker substring match `_is_captcha_page` actually does (D2B-020)
+ - add the 4 docs/changes/*.md files (node-runtime-repair, browser-binary-validation, browser-png, mit-license) that already existed but were missing from README.md's Documentation index (D2B-020)
+
+0.16 2026-09-15
+ - fix `--browser firefox`/`--browser webkit` launching against a Chromium/Chrome executablePath (CHROMIUM_BIN or auto-detected) instead of Playwright's own firefox/webkit binary (D2B-003)
+ - fix Node runtime dependency version checking to follow npm's caret-range rules for 0.x versions correctly, instead of only comparing the major version (D2B-004)
+ - join NODE_PATH using the platform's own path-list separator instead of a hardcoded ':', so the Node runtime resolves correctly on Windows (D2B-005)
+ - fix browser-binary PATH auto-detection to split on the platform separator and try a `.exe` suffix on Windows (D2B-006)
+ - broaden `browser.post`'s HTML-fragment detection so a response body with no `<!doctype html>`/`<html>` wrapper (and no `text/html`/`application/xhtml+xml` content-type) is still recognised as HTML rather than escaped into a `<pre>` block (D2B-008)
+ - narrow `is_captcha` detection to real reCAPTCHA/hCaptcha widget markup or a challenge-page title, instead of free substring matching across the whole rendered page text, which false-positived on ordinary content that merely mentions captchas (D2B-009)
+ - hold an exclusive lock around the whole stale-check-and-install sequence for the shared `$HOME/node_modules` tree, so two concurrent browser-skill invocations can no longer race each other's clear+copy and corrupt it (D2B-010)
+ - remove `_run_command`/`_run_in_dir`, two dead helpers with no call site anywhere in the skill (D2B-011)
+ - make `browser.get`'s title lookup as defensive as `browser.post`'s already is, so a `title()` failure no longer aborts the whole GET request (D2B-012)
+ - split lib/Browser/Runner.pm (718 lines) into Runner.pm (orchestration), Runner/NodeRuntime.pm (Node dependency install), and Runner/BrowserPath.pm (browser binary discovery/validation), each under 500 lines - no behaviour change (D2B-013)
+ - strip Perl's own "at FILE line N." trailer from CLI error output, so ordinary usage errors no longer leak internal source paths and line numbers to the user (D2B-015)
+ - fix the shared perl-test Docker image so it can actually launch a real Chromium browser: Ubuntu's apt "chromium" package is only a broken snap-wrapper stub with no functional browser behind it in a container, so the image now installs Playwright's own bundled Chromium at build time instead (D2B-014)
+ - refuse `--data` on `browser.get`/`browser.png`, naming `browser.post` - it was previously accepted and silently ignored (D2B-016)
+ - refuse `--wait-until`/`--timeout-ms` on `browser.post`, naming `browser.get`/`browser.png` - both were previously accepted and silently ignored (D2B-017)
+
 0.15 2026-05-06
  - add an explicit MIT license to the `browser` skill
  - document the MIT license in the README

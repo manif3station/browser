@@ -26,7 +26,7 @@ The skill ships:
 - `cli/get` and `cli/post` command entrypoints
 - `cli/png` screenshot entrypoint
 - `lib/Browser/CLI.pm` for CLI parsing and output
-- `lib/Browser/Runner.pm` for Playwright execution
+- `lib/Browser/Runner.pm` for Playwright execution orchestration, with `lib/Browser/Runner/NodeRuntime.pm` (Node dependency install) and `lib/Browser/Runner/BrowserPath.pm` (browser binary discovery/validation) split out as focused modules
 - dependency files for DD skill installation on Debian-family and macOS hosts
 - a `package.json` file for DD-managed Node dependency installation into `$HOME`
 - browser-binary validation so broken wrapper paths are not handed to Playwright
