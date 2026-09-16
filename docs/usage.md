@@ -17,6 +17,9 @@ dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
 dashboard browser.png https://example.com
 dashboard browser.png https://example.com --file /tmp/example-shot
+dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
+dashboard browser.search 'query' --engine google
+dashboard browser.search 'query' --engines duckduckgo,bing --max 5
 ```
 
 Local repository usage during development:
@@ -25,6 +28,7 @@ Local repository usage during development:
 perl cli/get https://example.com
 perl cli/post https://example.com/form --data 'name=dashboard'
 perl cli/png https://example.com --file /tmp/example-shot
+perl cli/search 'query'
 ```
 
 ## Output
@@ -207,6 +211,24 @@ discusses captchas, without one of those four markers actually present in
 the HTML, is not flagged.
 
 This is intended as a practical CLI signal, not a perfect classifier.
+
+## Search Mode
+
+`browser.search <query>` drives `browser.get`'s own GET path against an ordered list of search engines and returns structured results instead of raw HTML.
+
+The default engine order is `bing`, `google`, `duckduckgo`. For each engine in order, the skill checks the same `is_captcha` flag `browser.get` already computes on the response; if it is true, that engine is skipped and the next one is tried. The response payload names `engine_used` (which engine actually served the results) and `engines_tried` (every engine attempted, in order).
+
+Each result has `rank`, `title`, `url`, and `snippet`, extracted from that engine's own result markup. A layout change on one engine's search page only affects that engine's own parser.
+
+Example payload shape:
+
+```json
+{"query":"which mini PC can run a ~30B Qwen3 at 1M context","engine_used":"bing","engines_tried":["bing"],"results":[{"rank":1,"title":"...","url":"...","snippet":"..."}]}
+```
+
+`--engine NAME` restricts the search to one named engine (refused if the engine isn't one of the defaults). `--engines a,b,c` overrides the whole order. `--max N` caps how many results are returned (default 10).
+
+If every engine in the list comes back walled, the command refuses with a structured error naming each one and pointing to `browser.get --ask` for interactive use, rather than hanging or returning an empty success.
 
 ## Edge Cases
 

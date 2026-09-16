@@ -13,6 +13,7 @@ The skill gives a DD user one installable tool for:
 - using jQuery-style selectors without requiring the target page to ship jQuery
 - automating clicks, fills, navigation, and multi-page flows with Perl controller scripts
 - pausing for manual CAPTCHA or login work and then continuing
+- running a structured web search that automatically skips past any CAPTCHA-walled engine instead of hand-picking one
 
 ## Problem It Solves
 
@@ -25,12 +26,14 @@ Without a shared browser skill, quick browser tasks usually fragment into shell 
 - `dashboard browser.get <url>`
 - `dashboard browser.post <url>`
 - `dashboard browser.png <url>`
+- `dashboard browser.search <query>`
 - JavaScript page-context scripting through `--script`
 - Perl controller scripting through `--playwright`, `--agent`, or `--flow`
 - jQuery injection through `--jquery`
 - interactive visible-browser takeover through `--ask` and `--askme`
 - HTML body, text body, status, final URL, and CAPTCHA detection in the output payload
 - screenshot capture with a printed PNG file path
+- structured, ranked web search results with automatic CAPTCHA-triggered engine fallback
 
 ## Developer Dashboard Feature Added
 
@@ -39,6 +42,7 @@ This skill adds:
 - the dotted command `dashboard browser.get`
 - the dotted command `dashboard browser.post`
 - the dotted command `dashboard browser.png`
+- the dotted command `dashboard browser.search`
 - a DD skill example that depends on `aptfile`, `brewfile`, `cpanfile`, and `package.json`
 
 ## Layout
@@ -46,10 +50,12 @@ This skill adds:
 - `cli/get` GET entrypoint
 - `cli/post` POST entrypoint
 - `cli/png` screenshot entrypoint
+- `cli/search` search entrypoint
 - `lib/Browser/CLI.pm` CLI parsing and JSON output
 - `lib/Browser/Runner.pm` Playwright execution orchestration (GET/POST/PNG, controller mode)
 - `lib/Browser/Runner/NodeRuntime.pm` Node dependency install/version-satisfaction and the shared install lock
 - `lib/Browser/Runner/BrowserPath.pm` browser binary discovery/validation and Playwright launch options
+- `lib/Browser/Search.pm` multi-engine search fallback strategy and per-engine result parsing
 - `aptfile`, `brewfile`, `package.json`, and `cpanfile` dependency declarations
 - `t/` tests
 - `docs/` skill docs
@@ -104,7 +110,33 @@ Direct local development:
 perl cli/get https://example.com
 perl cli/post https://example.com/form --data 'name=dashboard'
 perl cli/png https://example.com --file /tmp/example-shot
+perl cli/search 'which mini PC can run a ~30B Qwen3 at 1M context'
 ```
+
+## Search Usage
+
+`browser.search <query>` returns structured, ranked results (`rank`, `title`, `url`, `snippet`) from an ordered list of search engines, defaulting to bing, google, duckduckgo in that order.
+
+```bash
+dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
+```
+
+If an engine's response looks CAPTCHA/bot-walled (the same `is_captcha` check `browser.get` already reports), the skill transparently tries the next engine instead of stopping. The response payload names which engine actually served the results (`engine_used`) and every engine that was tried (`engines_tried`).
+
+Override the engine order or limit the query to a single engine:
+
+```bash
+dashboard browser.search 'query' --engine google
+dashboard browser.search 'query' --engines duckduckgo,bing
+```
+
+Cap the number of results:
+
+```bash
+dashboard browser.search 'query' --max 5
+```
+
+If every engine in the list comes back walled, the command fails with a structured error naming each walled engine and pointing to `browser.get --ask` for interactive use - it never hangs waiting for a response that will not come.
 
 ## Screenshot Usage
 
@@ -403,6 +435,8 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 14. If a site needs several intermediate clicks before the real destination appears, inspect controls first rather than guessing the final selector.
 15. If the first page after login differs by account state, build the script to detect candidate destinations dynamically.
 16. A URL argument is only refused as missing when it is truly absent or an empty string - a URL that happens to be the single character `0` is accepted and used as-is, not rejected by Perl truthiness.
+17. If every engine `browser.search` tries comes back CAPTCHA-walled, the command fails immediately with a structured error naming each walled engine rather than hanging or picking a partial result.
+18. `browser.search --engine`/`--engines` only accept the names in the default engine list (`bing`, `google`, `duckduckgo`); an unrecognised name is refused by name rather than silently ignored.
 
 ## Documentation
 

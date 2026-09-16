@@ -7,6 +7,7 @@ use Getopt::Long qw(GetOptionsFromArray);
 use JSON::PP qw(encode_json);
 
 use Browser::Runner;
+use Browser::Search ();
 
 sub main {
     my (%args) = @_;
@@ -96,6 +97,65 @@ sub execute {
         file        => $options{file},
         input_fh    => $args{input_fh} || \*STDIN,
         prompt_fh   => $args{error_fh} || \*STDERR,
+    );
+}
+
+sub main_search {
+    my (%args) = @_;
+    my $output_fh = $args{output_fh} || \*STDOUT;
+    my $error_fh  = $args{error_fh}  || \*STDERR;
+
+    my $result = eval { execute_search(%args) };
+    if ( my $error = $@ ) {
+        print {$error_fh} _sanitize_error($error), "\n";
+        return 2;
+    }
+
+    print {$output_fh} encode_json($result), "\n";
+    return 0;
+}
+
+sub execute_search {
+    my (%args) = @_;
+    my @argv = @{ $args{argv} || [] };
+
+    my %options = ( max => 10 );
+    GetOptionsFromArray(
+        \@argv,
+        'engine=s'  => \$options{engine},
+        'engines=s' => \$options{engines},
+        'max=i'     => \$options{max},
+    ) or die "Invalid options";
+
+    my $query = shift @argv;
+    die "Missing query" if !defined $query || $query =~ /\A\s*\z/;
+    die "Unexpected arguments: @argv" if @argv;
+
+    die "--max must not be negative" if $options{max} < 0;
+
+    die "--engine and --engines cannot both be given"
+      if defined $options{engine} && defined $options{engines};
+
+    my @requested_names;
+    push @requested_names, $options{engine} if defined $options{engine};
+    push @requested_names, split /,/, $options{engines} if defined $options{engines};
+
+    die "--engines named no engines at all" if defined $options{engines} && !@requested_names;
+
+    my @engines;
+    if (@requested_names) {
+        my %by_name = map { $_->{name} => $_ } Browser::Search::_default_engines();
+        for my $name (@requested_names) {
+            die "Unknown engine: $name" if !exists $by_name{$name};
+            push @engines, $by_name{$name};
+        }
+    }
+
+    return Browser::Search::search(
+        query   => $query,
+        max     => $options{max},
+        ( @engines ? ( engines => \@engines ) : () ),
+        runner  => $args{runner},
     );
 }
 

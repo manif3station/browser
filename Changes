@@ -1,5 +1,8 @@
 Revision history for browser
 
+0.20 2026-09-16
+ - add `dashboard browser.search <query>`: returns structured, ranked search results (rank/title/url/snippet), automatically falling back past any engine that comes back CAPTCHA/bot-walled instead of hand-picking an engine and hand-parsing HTML. Default engine order is bing, google, duckduckgo; `--engine`/`--engines` override the order, `--max` caps the result count, and an all-engines-walled query fails with a structured error naming the walled engines and pointing to `--ask` (D2B-026)
+
 0.19 2026-09-16
  - fix `browser.get`/`browser.post`/`browser.png` wrongly refusing a URL argument of the literal string "0" as Missing URL, because the CLI's presence check used Perl truthiness instead of definedness/emptiness (D2B-025)
 

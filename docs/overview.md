@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It gives DD users a reusable way to drive a browser session from `dashboard browser.get`, `dashboard browser.post`, and `dashboard browser.png` without dropping into ad-hoc scripts first.
+`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It gives DD users a reusable way to drive a browser session from `dashboard browser.get`, `dashboard browser.post`, `dashboard browser.png`, and `dashboard browser.search` without dropping into ad-hoc scripts first.
 
 ## Value
 
@@ -17,6 +17,7 @@ This skill brings browser automation into the DD skill system so a user can:
 - run a small Playwright JavaScript snippet against the page DOM
 - run a Playwright-driven multi-page journey from one starting URL through controller-mode scripts
 - issue a POST request through Playwright and inspect the returned page content
+- run a structured web search across an ordered list of engines, automatically skipping any engine that comes back CAPTCHA-walled
 - keep that automation isolated inside an installable DD skill
 
 ## Delivery
@@ -25,8 +26,10 @@ The skill ships:
 
 - `cli/get` and `cli/post` command entrypoints
 - `cli/png` screenshot entrypoint
+- `cli/search` search entrypoint
 - `lib/Browser/CLI.pm` for CLI parsing and output
 - `lib/Browser/Runner.pm` for Playwright execution orchestration, with `lib/Browser/Runner/NodeRuntime.pm` (Node dependency install) and `lib/Browser/Runner/BrowserPath.pm` (browser binary discovery/validation) split out as focused modules
+- `lib/Browser/Search.pm` for the multi-engine fallback strategy and per-engine result parsing
 - dependency files for DD skill installation on Debian-family and macOS hosts
 - a `package.json` file for DD-managed Node dependency installation into `$HOME`
 - browser-binary validation so broken wrapper paths are not handed to Playwright
