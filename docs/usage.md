@@ -219,7 +219,7 @@ This is intended as a practical CLI signal, not a perfect classifier.
 
 The default engine order is `bing`, `google`, `duckduckgo`. For each engine in order, the skill checks the same `is_captcha` flag `browser.get` already computes on the response; if it is true, that engine is skipped and the next one is tried. The response payload names `engine_used` (which engine actually served the results) and `engines_tried` (every engine attempted, in order).
 
-Each result has `rank`, `title`, `url`, and `snippet`, extracted from that engine's own result markup. A layout change on one engine's search page only affects that engine's own parser.
+Each result has `rank`, `title`, `url`, and `snippet`, extracted from that engine's own result markup. A layout change on one engine's search page only affects that engine's own parser. `title` and `snippet` have common HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, and numeric decimal/hex entities like `&#39;`/`&#x27;`) decoded, so they contain the real characters rather than literal entity text. This decoding requires the trailing semicolon and is a single pass (a double-encoded `&amp;amp;` decodes once, to `&amp;`, not recursively to `&`); an entity outside the valid Unicode range is left as literal text rather than raising an error.
 
 Example payload shape:
 

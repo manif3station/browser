@@ -116,8 +116,40 @@ sub _strip_tags {
     my ($value) = @_;
     return q{} if !defined $value;
     $value =~ s{<[^>]*>}{}g;
+    $value = _decode_entities($value);
     $value =~ s{\A\s+|\s+\z}{}g;
     return $value;
+}
+
+my %NAMED_ENTITIES = (
+    amp  => '&',
+    lt   => '<',
+    gt   => '>',
+    quot => '"',
+    apos => q{'},
+);
+
+sub _decode_entities {
+    my ($value) = @_;
+    $value =~ s{&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);}{
+        my $entity = $1;
+        if ( $entity =~ /^#x([0-9a-fA-F]+)\z/ ) {
+            _codepoint_to_char( hex($1) ) // "&$entity;";
+        }
+        elsif ( $entity =~ /^#([0-9]+)\z/ ) {
+            _codepoint_to_char($1) // "&$entity;";
+        }
+        else {
+            exists $NAMED_ENTITIES{$entity} ? $NAMED_ENTITIES{$entity} : "&$entity;";
+        }
+    }ge;
+    return $value;
+}
+
+sub _codepoint_to_char {
+    my ($codepoint) = @_;
+    return undef if $codepoint > 0x10FFFF;
+    return chr($codepoint);
 }
 
 1;

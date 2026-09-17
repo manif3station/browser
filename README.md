@@ -446,6 +446,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 19. `--browser` only accepts `chrome`, `chromium`, `firefox`, or `webkit` - an unrecognised value (e.g. a typo) is refused with a clear "Unsupported browser type" error before ever reaching Playwright, instead of an opaque native error.
 20. If `--ask`/`--askme`'s confirmation read finds stdin already at EOF (closed, redirected from `/dev/null`, or already drained by a prior read), the command refuses with "stdin is not interactive" instead of silently treating the missing keypress as confirmation and continuing as if a human had pressed Enter. This checks only for EOF, not whether stdin is a real TTY - an open pipe or file that still has a line to read (e.g. containing "\n") is accepted the same as a real keypress.
 21. `--engines` tolerates whitespace around the commas (e.g. `--engines "bing, google"` or `--engines "  duckduckgo  ,  bing  "`) - each name is trimmed before being looked up, rather than failing with "Unknown engine" on the untrimmed, space-padded value.
+22. `browser.search` result `title`/`snippet` fields have common HTML entities decoded (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, and numeric decimal/hex entities like `&#39;`/`&#x27;`) - a result whose source markup encodes an ampersand or apostrophe returns the real character, not the literal entity text.
 
 ## Documentation
 

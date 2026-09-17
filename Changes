@@ -1,5 +1,8 @@
 Revision history for browser
 
+0.42 2026-09-17
+ - fix browser.search result titles/snippets containing raw HTML entities (e.g. "&amp;amp;", "&amp;#39;") instead of the decoded characters they represent; _strip_tags now decodes common named entities (&amp;, &lt;, &gt;, &quot;, &apos;) and numeric decimal/hex entities after stripping tags (D2B-050)
+
 0.41 2026-09-17
  - fix Browser::Runner::request leaking a launched browser process if launch() or newPage() itself failed (e.g. launch() started a real process, but the subsequent newPage() call then died) - those two calls previously ran before the eval block that guards playwright->quit() cleanup, so no cleanup was ever attempted; they now run inside it, matching the cleanup discipline already used for every other failure path in this method (D2B-047)
 
