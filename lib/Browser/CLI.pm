@@ -122,9 +122,10 @@ sub execute_search {
     my %options = ( max => 10 );
     GetOptionsFromArray(
         \@argv,
-        'engine=s'  => \$options{engine},
-        'engines=s' => \$options{engines},
-        'max=i'     => \$options{max},
+        'engine=s'     => \$options{engine},
+        'engines=s'    => \$options{engines},
+        'max=i'        => \$options{max},
+        'timeout-ms=i' => \$options{timeout_ms},
     ) or die "Invalid options";
 
     my $query = shift @argv;
@@ -138,24 +139,28 @@ sub execute_search {
 
     my @requested_names;
     push @requested_names, $options{engine} if defined $options{engine};
-    push @requested_names, split /,/, $options{engines} if defined $options{engines};
+    push @requested_names, map { s/\A\s+|\s+\z//g; $_ } split /,/, $options{engines} if defined $options{engines};
 
     die "--engines named no engines at all" if defined $options{engines} && !@requested_names;
 
     my @engines;
     if (@requested_names) {
-        my %by_name = map { $_->{name} => $_ } Browser::Search::_default_engines();
+        my %by_name = map { lc( $_->{name} ) => $_ } Browser::Search::_default_engines();
+        my %seen;
         for my $name (@requested_names) {
-            die "Unknown engine: $name" if !exists $by_name{$name};
-            push @engines, $by_name{$name};
+            my $key = lc $name;
+            die "Unknown engine: $name" if !exists $by_name{$key};
+            next if $seen{$key}++;
+            push @engines, $by_name{$key};
         }
     }
 
     return Browser::Search::search(
-        query   => $query,
-        max     => $options{max},
+        query      => $query,
+        max        => $options{max},
         ( @engines ? ( engines => \@engines ) : () ),
-        runner  => $args{runner},
+        ( defined $options{timeout_ms} ? ( timeout_ms => $options{timeout_ms} ) : () ),
+        runner     => $args{runner},
     );
 }
 

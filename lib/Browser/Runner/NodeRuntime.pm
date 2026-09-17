@@ -8,6 +8,8 @@ use Cwd qw(getcwd);
 use Digest::SHA qw(sha256_hex);
 use Fcntl qw(:flock);
 use File::Basename qw(dirname);
+use File::Copy qw(copy);
+use File::Find ();
 use File::Path qw(remove_tree);
 use File::Spec;
 use File::Temp qw(tempdir);
@@ -48,7 +50,9 @@ sub _ensure_node_runtime {
         }
     );
 
-    $ENV{NODE_PATH} = join _path_list_separator(), grep { defined && $_ ne q{} } $node_modules, $ENV{NODE_PATH};
+    my $sep = _path_list_separator();
+    my @existing = defined $ENV{NODE_PATH} && $ENV{NODE_PATH} ne q{} ? split /\Q$sep\E/, $ENV{NODE_PATH}, -1 : ();
+    $ENV{NODE_PATH} = join $sep, $node_modules, grep { $_ ne $node_modules } @existing;
     return $node_modules;
 }
 
@@ -189,7 +193,7 @@ sub _install_node_runtime {
         home_root    => $home_root,
         package_json => $package_json,
     );
-    _run_quiet_command( 'cp', '-R', "$workspace_modules/.", $target_root );
+    _recursive_copy_dir( $workspace_modules, $target_root );
     return 1;
 }
 
@@ -260,7 +264,10 @@ sub _version_satisfies_spec {
     my ( $installed, $spec ) = @_;
     return 0 if !defined $installed || !defined $spec || $installed eq q{} || $spec eq q{};
     return 1 if $spec eq '*' || $spec eq 'latest';
-    return $installed eq $spec if $spec !~ /^\^/;
+    if ( $spec !~ /^\^/ ) {
+        return $installed eq $spec if $spec =~ /^[0-9]+\.[0-9]+\.[0-9]+\z/;
+        die "Unsupported version spec: $spec (expected an exact version, '*', 'latest', or a caret range like ^1.2.3)";
+    }
 
     my $minimum = substr $spec, 1;
     my @installed = _version_parts($installed);
@@ -295,6 +302,49 @@ sub _compare_version_parts {
         return $cmp if $cmp != 0;
     }
     return 0;
+}
+
+# Portable replacement for shelling out to Unix 'cp -R', which does not
+# exist on native Windows Perl. Recreates $source's directory structure
+# (including empty directories) under $target, recreates symlinks as
+# symlinks rather than dereferencing them (node_modules/.bin is exactly
+# this - executable symlinks a broken copy would silently replace with a
+# dereferenced regular file), and preserves each regular file's
+# permission bits (including the executable bit npm-installed binaries
+# rely on), which File::Copy::copy alone does not.
+sub _recursive_copy_dir {
+    my ( $source, $target ) = @_;
+    File::Find::find(
+        {
+            no_chdir => 1,
+            wanted   => sub {
+                return if $_ eq $source;
+                my $relative = File::Spec->abs2rel( $_, $source );
+                my $destination = File::Spec->catfile( $target, $relative );
+
+                if ( -l $_ ) {
+                    _make_path_if_missing( dirname($destination) );
+                    unlink $destination if -e $destination || -l $destination;
+                    my $link_target = readlink($_);
+                    symlink( $link_target, $destination )
+                      or die "Unable to symlink $destination -> $link_target: $!";
+                    return;
+                }
+
+                if ( -d $_ ) {
+                    _make_path_if_missing($destination);
+                    return;
+                }
+
+                _make_path_if_missing( dirname($destination) );
+                copy( $_, $destination ) or die "Unable to copy $_ to $destination: $!";
+                my $mode = ( stat $_ )[2];
+                chmod( $mode & 07777, $destination ) if defined $mode;
+            },
+        },
+        $source,
+    );
+    return 1;
 }
 
 sub _make_path_if_missing {
@@ -335,7 +385,10 @@ sub _write_node_runtime_stamp {
 
 sub _skill_root {
     return $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} if $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT};
-    return getcwd() if -d File::Spec->catdir( getcwd(), 'cli' ) && -d File::Spec->catdir( getcwd(), 'lib' );
+    return getcwd()
+      if -d File::Spec->catdir( getcwd(), 'cli' )
+      && -d File::Spec->catdir( getcwd(), 'lib' )
+      && -f File::Spec->catfile( getcwd(), 'lib', 'Browser', 'CLI.pm' );
     return File::Spec->catdir( dirname( dirname( dirname( dirname(__FILE__) ) ) ) );
 }
 

@@ -1,5 +1,68 @@
 Revision history for browser
 
+0.41 2026-09-17
+ - fix Browser::Runner::request leaking a launched browser process if launch() or newPage() itself failed (e.g. launch() started a real process, but the subsequent newPage() call then died) - those two calls previously ran before the eval block that guards playwright->quit() cleanup, so no cleanup was ever attempted; they now run inside it, matching the cleanup discipline already used for every other failure path in this method (D2B-047)
+
+0.40 2026-09-17
+ - add a test guarding .env's VERSION field against being malformed (e.g. a typo like "0.2O") or referring to a release never actually recorded in Changes; previously nothing caught either mistake (D2B-046)
+
+0.39 2026-09-17
+ - add explicit use_ok() calls for Browser::Search, Browser::Runner::NodeRuntime, and Browser::Runner::BrowserPath to t/00-load.t, which previously only exercised Browser::CLI and Browser::Runner directly (the other three loaded only transitively, so a real syntax error in any of them would not have been caught by this smoke test) (D2B-045)
+
+0.38 2026-09-17
+ - fix browser.search's --engines silently accepting a duplicate engine name (e.g. `--engines bing,bing`), which would retry the exact same walled engine a second time wasting a full request/browser-launch cycle; the requested engine list is now deduplicated (case-insensitively, preserving order of first occurrence) before use (D2B-044)
+
+0.37 2026-09-17
+ - fix package.json's version field violating SemVer (leading zero in "0.01.0"); changed to the valid "0.1.0". Low practical impact since the package is private and never published, but a real spec violation that could confuse strict tooling (D2B-043)
+
+0.36 2026-09-17
+ - fix browser.search's --engine/--engines matching engine names case-sensitively, so a capitalized or mixed-case value (e.g. `--engine Bing` or `--engines DuckDuckGo,BING`) died with "Unknown engine" even though the intent was unambiguous; both the requested name(s) and the known engine list are now compared case-insensitively (D2B-042)
+
+0.35 2026-09-17
+ - fix browser.search's --engines parsing dying with "Unknown engine" on a human-friendly comma-separated value with whitespace around the commas (e.g. `--engines "bing, google"`); each engine name is now trimmed of leading/trailing whitespace before being looked up (D2B-041)
+
+0.34 2026-09-17
+ - fix _skill_root's local-development cwd fallback, which trusted any current directory that merely had both a 'cli' and a 'lib' subdirectory (a coincidental match on an unrelated directory would silently resolve to the wrong skill root); it now also requires the skill-specific marker lib/Browser/CLI.pm to exist before trusting the cwd guess, falling through to the reliable __FILE__-relative resolution otherwise (D2B-038)
+
+0.33 2026-09-17
+ - fix _version_satisfies_spec silently mishandling npm version-spec syntax it doesn't understand (tilde ranges, comparison operators, space-separated ranges) by falling through to a plain string-equality check that is silently wrong for anything but an exact match; it now dies with a clear "Unsupported version spec" error for those cases while exact versions, '*', 'latest', and caret ranges keep working exactly as before (D2B-037)
+
+0.32 2026-09-17
+ - fix NODE_PATH growing an unbounded duplicate module-path entry every time _ensure_node_runtime is called in a long-lived process (e.g. a persistent dashboard rather than this skill's own one-shot CLI); it now dedupes the existing NODE_PATH before prepending the module path (D2B-035)
+
+0.31 2026-09-17
+ - remove an unreachable dead-code check in _browser_path_is_usable ('return 0 if $exit != 0' after _run_quiet_command, which only ever dies on failure or returns 0 on success and can never return any other nonzero value); added a clarifying comment explaining why only the eval/$@ check is needed (D2B-034)
+
+0.30 2026-09-17
+ - fix --ask/--askme silently no-opping when the confirmation read from stdin hits EOF (stdin closed, redirected from /dev/null, or already drained): it used to return undef immediately and the command proceeded as if the user had pressed Enter; it now dies with a clear "stdin is not interactive" error instead (D2B-031)
+
+0.29 2026-09-17
+ - fix browser.search never bounding each engine attempt with a timeout, relying solely on Playwright's own longer internal default; it now defaults to a 10 second per-engine timeout (overridable via the new --timeout-ms flag, matching browser.get/post/png's own flag), so a slow/unresponsive engine fails fast instead of stacking long waits across several default engines (D2B-040)
+
+0.28 2026-09-16
+ - fix the Node runtime auto-heal copy step, which shelled out to Unix `cp -R` (nonexistent on native Windows Perl), by replacing it with a portable Perl-native recursive copy that preserves symlinks (e.g. node_modules/.bin entries), empty directories, and file permission bits the same way `cp -R` did (D2B-036)
+
+0.27 2026-09-16
+ - refuse an unrecognized --browser value with a clear "Unsupported browser type" error naming the invalid value and the supported list (chrome, chromium, firefox, webkit), instead of letting a typo reach Playwright's own launch() and produce an opaque native error (D2B-033)
+
+0.26 2026-09-16
+ - fix _response_document's fragment-detection check, which accepted any opening tag paired with any closing tag (e.g. '<div>text</span>') as trustworthy HTML instead of escaping it into the safe fallback; now requires the tag names to actually match (case-insensitively) via a backreference (D2B-032)
+
+0.25 2026-09-16
+ - fix Runner::request's success-path cleanup: a playwright->quit() failure after a successful GET/POST/PNG no longer discards the already-computed result, matching the same eval-wrapped cleanup the error path already used (D2B-029)
+
+0.24 2026-09-16
+ - fix browser.search's all-engines-failed error, which blanket-attributed every engine failure to a CAPTCHA/bot-check wall even when the real cause was a request exception (network error, missing browser binary, timeout); the error now names each engine's real failure reason and only mentions --ask when a genuine CAPTCHA was actually encountered (D2B-039)
+
+0.23 2026-09-16
+ - fix browser.post's window.__BROWSER_POST__ JS assignment being built via unsafe raw concatenation of encode_json's byte-string output: normalized to a proper character string and escaped the Unicode LINE SEPARATOR/PARAGRAPH SEPARATOR characters, which are legal JS line terminators in source text and could otherwise let a POST response body break out of the intended JS string literal (D2B-030)
+
+0.22 2026-09-16
+ - fix browser.search launching a visible (non-headless) browser instead of headless - it never passed `headless` through to the runner, and an unset headless defaults to false; browser.get/post/png were unaffected since they always set it explicitly (D2B-028)
+
+0.21 2026-09-16
+ - fix browser.search's default duckduckgo engine URL, which pointed at duckduckgo.com/html/ - verified live to 302-redirect to html.duckduckgo.com/html/ - to build the request directly against html.duckduckgo.com, avoiding an unnecessary extra HTTP round trip on every duckduckgo search (D2B-027)
+
 0.20 2026-09-16
  - add `dashboard browser.search <query>`: returns structured, ranked search results (rank/title/url/snippet), automatically falling back past any engine that comes back CAPTCHA/bot-walled instead of hand-picking an engine and hand-parsing HTML. Default engine order is bing, google, duckduckgo; `--engine`/`--engines` override the order, `--max` caps the result count, and an all-engines-walled query fails with a structured error naming the walled engines and pointing to `--ask` (D2B-026)
 

@@ -511,12 +511,18 @@ my $timeout_playwright = FakePlaywright->new(
 my $timeout_runner = Browser::Runner->new(
     playwright_factory => sub { return $timeout_playwright },
 );
+my $timeout_prompt = q{};
+open my $timeout_prompt_fh, '>', \$timeout_prompt or die "Unable to open timeout prompt scalar: $!";
+my $timeout_input = "\n";
+open my $timeout_input_fh, '<', \$timeout_input or die "Unable to open timeout input scalar: $!";
 $timeout_runner->request(
     method      => 'GET',
     url         => 'https://example.test/slow',
     interactive => 1,
     headless    => 0,
     timeout_ms  => 45000,
+    input_fh    => $timeout_input_fh,
+    prompt_fh   => $timeout_prompt_fh,
 );
 is( $timeout_page->{goto_args}[1]{timeout}, 45000, 'interactive GET respects an explicit timeout override' );
 
@@ -817,7 +823,11 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 {
     my $temp_root = tempdir( CLEANUP => 1 );
     make_path( File::Spec->catdir( $temp_root, 'cli' ) );
-    make_path( File::Spec->catdir( $temp_root, 'lib' ) );
+    make_path( File::Spec->catdir( $temp_root, 'lib', 'Browser' ) );
+    open my $marker_fh, '>', File::Spec->catfile( $temp_root, 'lib', 'Browser', 'CLI.pm' )
+      or die "Unable to write skill-root marker file: $!";
+    print {$marker_fh} "1;\n";
+    close $marker_fh;
     my $cwd = Cwd::getcwd();
     chdir $temp_root or die "Unable to chdir to temp root: $!";
     is( Browser::Runner::NodeRuntime::_skill_root(), $temp_root, 'skill root falls back to the current skill repo during local development' );

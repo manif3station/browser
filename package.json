@@ -1,6 +1,6 @@
 {
   "name": "browser-skill",
-  "version": "0.01.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Developer Dashboard browser skill Node runtime dependencies",
   "dependencies": {

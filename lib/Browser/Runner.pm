@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Digest::SHA qw(sha256_hex);
+use Encode qw(decode_utf8);
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use File::Spec;
@@ -26,11 +27,13 @@ sub request {
       ? $self->{playwright_factory}->(%args)
       : _new_playwright();
 
-    my $browser = $playwright->launch( Browser::Runner::BrowserPath::_launch_options(%args) );
-    my $page    = $browser->newPage();
+    my $browser;
+    my $page;
     my $result;
 
     eval {
+        $browser = $playwright->launch( Browser::Runner::BrowserPath::_launch_options(%args) );
+        $page    = $browser->newPage();
         $result = $method eq 'GET'
           ? _run_get( $page, browser => $browser, playwright => $playwright, %args )
           : $method eq 'POST'
@@ -43,7 +46,7 @@ sub request {
         die $error;
     };
 
-    $playwright->quit();
+    eval { $playwright->quit() };
     return $result;
 }
 
@@ -134,7 +137,7 @@ sub _run_post {
     );
 
     $page->setContent($html);
-    $page->evaluate( 'window.__BROWSER_POST__ = ' . encode_json(
+    $page->evaluate( 'window.__BROWSER_POST__ = ' . _post_data_as_js_literal(
         {
             method => 'POST',
             status => $status,
@@ -235,7 +238,8 @@ sub _await_user {
     my $input_fh = $args{input_fh} || \*STDIN;
     my $prompt_fh = $args{prompt_fh} || \*STDERR;
     print {$prompt_fh} "Browser is open for interactive work. Complete the captcha or login flow, then press Enter to continue.\n";
-    scalar <$input_fh>;
+    my $line = <$input_fh>;
+    die "stdin is not interactive - --ask/--askme requires a real terminal to confirm on\n" if !defined $line;
     return 1;
 }
 
@@ -276,7 +280,7 @@ sub _response_document {
     my $body = defined $args{body} ? $args{body} : q{};
     my $content_type = lc( $args{content_type} || q{} );
     return $body if $content_type =~ m{text/html} || $content_type =~ m{xhtml\+xml} || $body =~ m{\A\s*<!doctype html}i || $body =~ m{\A\s*<html}i;
-    return $body if $body =~ m{\A\s*<[a-zA-Z][^>]*>.*</[a-zA-Z][^>]*>\s*\z}s;
+    return $body if $body =~ m{\A\s*<([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>.*</\1>\s*\z}si;
 
     return join q{},
       '<!doctype html><html><head><meta charset="utf-8"><title>browser.post</title></head><body><pre id="browser-post-body">',
@@ -290,6 +294,23 @@ sub _escape_html {
     $value =~ s/</&lt;/g;
     $value =~ s/>/&gt;/g;
     return $value;
+}
+
+# encode_json returns a UTF-8 encoded byte string, not a Perl character
+# string; concatenating it directly with other (possibly wide-character)
+# Perl strings mixes representations and can corrupt non-ASCII content.
+# decode_utf8 normalizes it back to a proper character string first. On
+# top of that, JSON permits U+2028/U+2029 unescaped in a string value, but
+# both are legal JS line terminators when the JSON text is embedded as JS
+# *source* (not parsed as JSON) - as this is, via string concatenation
+# into a page.evaluate() call - so they are additionally escaped to avoid
+# a POST response body breaking out of the intended JS string context.
+sub _post_data_as_js_literal {
+    my ($data) = @_;
+    my $json = decode_utf8( encode_json($data) );
+    $json =~ s/\x{2028}/\\u2028/g;
+    $json =~ s/\x{2029}/\\u2029/g;
+    return $json;
 }
 
 1;

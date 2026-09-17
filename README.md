@@ -102,7 +102,7 @@ dashboard browser.get https://example.com/start --flow --script 'my $response = 
 dashboard browser.post https://example.com/form --data 'name=dashboard'
 ```
 
-`--data` is refused on `browser.get`/`browser.png` - only `browser.post` reads it. Likewise, `--wait-until`/`--timeout-ms` are refused on `browser.post` - only `browser.get`/`browser.png` read them.
+`--data` is refused on `browser.get`/`browser.png` - only `browser.post` reads it. Likewise, `--wait-until`/`--timeout-ms` are refused on `browser.post` - `browser.get`/`browser.png` read them, and `browser.search` also reads `--timeout-ms` (bounding each engine attempt, default 10 seconds).
 
 Direct local development:
 
@@ -136,7 +136,13 @@ Cap the number of results:
 dashboard browser.search 'query' --max 5
 ```
 
-If every engine in the list comes back walled, the command fails with a structured error naming each walled engine and pointing to `browser.get --ask` for interactive use - it never hangs waiting for a response that will not come.
+Each engine attempt is bounded by `--timeout-ms` (default 10000, i.e. 10 seconds), so a slow or unresponsive engine fails fast and moves on to the next one instead of stacking multiple long waits:
+
+```bash
+dashboard browser.search 'query' --timeout-ms 5000
+```
+
+If every engine in the list comes back walled, the command fails with a structured error naming each walled engine and pointing to `browser.get --ask` for interactive use - the bounded per-engine timeout means it never hangs waiting for a response that will not come.
 
 ## Screenshot Usage
 
@@ -425,7 +431,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 4. If the page is large, `browser.get` returns a large JSON payload because it includes the rendered HTML body.
 5. If the response looks like a challenge page, `is_captcha` is set to true and `body_text` provides a readable summary. Detection is a case-insensitive substring match for one of four reCAPTCHA/hCaptcha markers (`g-recaptcha`, `h-captcha`, `recaptcha/api`, `hcaptcha.com`) in the page's HTML, or a challenge-page title (e.g. "unusual traffic from your computer network") - not any mention of "captcha" in the page's rendered text, so an ordinary page that merely discusses captchas without one of those markers is not flagged.
 6. If a POST response is plain text instead of HTML, the skill wraps it in HTML so DOM scripts still have a page to inspect. A response body that is already HTML - `text/html`/`application/xhtml+xml` content-type, a `<!doctype html>`/`<html>` wrapper, or simply a tag-shaped fragment like `<div>...</div>` with no wrapper at all - is set as real DOM instead of being escaped.
-7. If `--ask` or `--askme` is used, the command opens a visible browser and waits for terminal confirmation before continuing.
+7. If `--ask` or `--askme` is used, the command opens a visible browser and waits for confirmation input before continuing.
 8. If `--ask` is used, the initial navigation defaults to `load` with no timeout; add `--timeout-ms` if you want a bounded initial wait.
 9. If `--ask` is used on a host without a display server, the headed browser launch can fail until the command runs in a desktop-capable environment.
 10. If `--jquery` is used, it only helps page-side JavaScript or `$page->evaluate(...)` calls, not Perl itself.
@@ -436,7 +442,10 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 15. If the first page after login differs by account state, build the script to detect candidate destinations dynamically.
 16. A URL argument is only refused as missing when it is truly absent or an empty string - a URL that happens to be the single character `0` is accepted and used as-is, not rejected by Perl truthiness.
 17. If every engine `browser.search` tries comes back CAPTCHA-walled, the command fails immediately with a structured error naming each walled engine rather than hanging or picking a partial result.
-18. `browser.search --engine`/`--engines` only accept the names in the default engine list (`bing`, `google`, `duckduckgo`); an unrecognised name is refused by name rather than silently ignored.
+18. `browser.search --engine`/`--engines` only accept the names in the default engine list (`bing`, `google`, `duckduckgo`); an unrecognised name is refused by name rather than silently ignored. Matching is case-insensitive - `--engine Bing` or `--engines DuckDuckGo,BING` resolve the same as their lowercase forms. A repeated name in `--engines` (e.g. `bing,bing`) is deduplicated, preserving the order of first occurrence, so it is never tried twice.
+19. `--browser` only accepts `chrome`, `chromium`, `firefox`, or `webkit` - an unrecognised value (e.g. a typo) is refused with a clear "Unsupported browser type" error before ever reaching Playwright, instead of an opaque native error.
+20. If `--ask`/`--askme`'s confirmation read finds stdin already at EOF (closed, redirected from `/dev/null`, or already drained by a prior read), the command refuses with "stdin is not interactive" instead of silently treating the missing keypress as confirmation and continuing as if a human had pressed Enter. This checks only for EOF, not whether stdin is a real TTY - an open pipe or file that still has a line to read (e.g. containing "\n") is accepted the same as a real keypress.
+21. `--engines` tolerates whitespace around the commas (e.g. `--engines "bing, google"` or `--engines "  duckduckgo  ,  bing  "`) - each name is trimmed before being looked up, rather than failing with "Unknown engine" on the untrimmed, space-padded value.
 
 ## Documentation
 

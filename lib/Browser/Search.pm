@@ -10,7 +10,7 @@ sub _default_engines {
     return (
         { name => 'bing',       url => sub { 'https://www.bing.com/search?q=' . uri_escape_utf8( $_[0] ) } },
         { name => 'google',     url => sub { 'https://www.google.com/search?q=' . uri_escape_utf8( $_[0] ) } },
-        { name => 'duckduckgo', url => sub { 'https://duckduckgo.com/html/?q=' . uri_escape_utf8( $_[0] ) } },
+        { name => 'duckduckgo', url => sub { 'https://html.duckduckgo.com/html/?q=' . uri_escape_utf8( $_[0] ) } },
     );
 }
 
@@ -26,12 +26,30 @@ sub search {
     die "--max must not be negative" if $max < 0;
     my $runner = $args{runner} || Browser::Runner->new();
 
+    # Bounded so several default engines tried sequentially can't stack
+    # multiple Playwright ~30s waits into a much longer effective hang.
+    my $timeout_ms = defined $args{timeout_ms} ? $args{timeout_ms} : 10_000;
+
     my @tried;
+    my @failures;
+    my $any_captcha = 0;
     for my $engine (@engines) {
         my $url = $engine->{url}->($query);
-        my $result = eval { $runner->request( method => 'GET', url => $url ) };
+        my $result = eval { $runner->request( method => 'GET', url => $url, headless => 1, timeout_ms => $timeout_ms ) };
+        my $error = $@;
         push @tried, $engine->{name};
-        next if !$result || $result->{is_captcha};
+
+        if ( !$result ) {
+            chomp $error;
+            $error = 'unknown error' if !length $error;
+            push @failures, "$engine->{name} (request failed: $error)";
+            next;
+        }
+        if ( $result->{is_captcha} ) {
+            $any_captcha = 1;
+            push @failures, "$engine->{name} (CAPTCHA/bot-check wall)";
+            next;
+        }
 
         my $results = _parse_results( engine => $engine->{name}, body => $result->{body} );
         $results = [ @{$results}[ 0 .. $max - 1 ] ] if $max < @$results;
@@ -44,8 +62,9 @@ sub search {
         };
     }
 
-    die 'All search engines walled by CAPTCHA/bot-check: ' . join( ', ', @tried )
-      . ' - use --ask on browser.get for interactive search instead';
+    my $message = 'All search engines failed: ' . join( ', ', @failures );
+    $message .= ' - use --ask on browser.get for interactive search instead' if $any_captcha;
+    die $message;
 }
 
 sub _parse_results {

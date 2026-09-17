@@ -7,9 +7,14 @@ use File::Spec;
 
 use Browser::Runner::NodeRuntime ();
 
+my @SUPPORTED_BROWSER_TYPES = qw(chrome chromium firefox webkit);
+
 sub _launch_options {
     my (%args) = @_;
-    my $type = ( $args{browser} || 'chrome' ) eq 'chromium' ? 'chrome' : ( $args{browser} || 'chrome' );
+    my $requested = $args{browser} || 'chrome';
+    die "Unsupported browser type: $requested (expected one of: @SUPPORTED_BROWSER_TYPES)"
+      if !grep { $_ eq $requested } @SUPPORTED_BROWSER_TYPES;
+    my $type = $requested eq 'chromium' ? 'chrome' : $requested;
     my %launch = (
         headless => $args{headless} ? 1 : 0,
         type     => $type,
@@ -72,9 +77,11 @@ sub _browser_path_is_usable {
     return 0 if !File::Spec->file_name_is_absolute($path);
     return 0 if !-x $path || -d $path;
 
-    my $exit = eval { Browser::Runner::NodeRuntime::_run_quiet_command( $path, '--version' ) };
+    # _run_quiet_command dies on any nonzero exit and only ever returns
+    # on success, so it only ever returns 0 here - checking $@ alone
+    # already covers every failure case.
+    eval { Browser::Runner::NodeRuntime::_run_quiet_command( $path, '--version' ) };
     return 0 if $@;
-    return 0 if $exit != 0;
     return 1;
 }
 
