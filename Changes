@@ -1,5 +1,11 @@
 Revision history for browser
 
+0.80 2026-09-18
+ - add a minimum Node.js version check - nothing checked the system's actual node binary version before this, so an outdated Node (below v20, Playwright's own declared minimum per its installed package.json's "engines" field) only surfaced as whatever cryptic native error Playwright/require produced deep in its own module-loading chain. _ensure_node_runtime now checks the node binary's version first and dies with a clear "Node.js v20+ is required ... found vN. Please upgrade Node.js." message; package.json now also declares "engines": { "node": ">=20" } (D2B-095)
+
+0.79 2026-09-18
+ - correct the historical record: the 0.78 release commit's message misattributed D2B-062's discard reason as "a cross-project data-loss bug caught in its own fix." That description does not belong to this project - it was mistakenly carried over from an unrelated entry in Tira's own changelog. D2B-062's real, board-verified discard reason: superseded by D2B-073, which added a separate /recaptcha/ substring check alongside the existing \bcaptcha\b title regex (catching a realistic "reCAPTCHA verification required" title the word-boundary regex alone misses), making D2B-062's proposed doc-only limitation note about that same gap moot. No functional or documentation change beyond this correction; the already-pushed 0.78 release commit is not rewritten (D2B-094)
+
 0.78 2026-09-18
  - document browser.get/post/png's already-working --headless/--no-headless flag - it defaults to headless=1 and correctly reaches Browser::Runner->request(), but was never mentioned in README.md or docs/usage.md. No code change; documentation only (D2B-093)
 

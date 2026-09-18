@@ -23,6 +23,8 @@ sub _ensure_node_runtime {
     my $package_json = File::Spec->catfile( $skill_root, 'package.json' );
     die "Missing package.json in $skill_root" if !-f $package_json;
 
+    _check_node_version();
+
     my $node_modules = File::Spec->catdir( $home_root, 'node_modules' );
 
     # Cleared at the start of every call: the package.json read-cache is
@@ -387,6 +389,32 @@ sub _skill_root {
       && -d File::Spec->catdir( getcwd(), 'lib' )
       && -f File::Spec->catfile( getcwd(), 'lib', 'Browser', 'CLI.pm' );
     return File::Spec->catdir( dirname( dirname( dirname( dirname(__FILE__) ) ) ) );
+}
+
+# D2B-095: package.json's playwright ^1.55.1 dependency itself declares
+# "engines": { "node": ">=20" } (verified in the installed package's own
+# package.json). Nothing here checked the system's actual node binary
+# version before this - an outdated Node would only surface as whatever
+# cryptic native error Playwright/require produced deep in its own
+# module-loading chain, with no indication that upgrading Node is the
+# real fix.
+sub _minimum_node_major_version { return 20 }
+
+sub _node_major_version {
+    my $version_output = qx{node --version 2>&1};
+    $version_output = defined $version_output ? $version_output : q{};
+    my ($major) = $version_output =~ /^v(\d+)/;
+    return $major;
+}
+
+sub _check_node_version {
+    my $major = _node_major_version();
+    my $minimum = _minimum_node_major_version();
+    die "Node.js v$minimum+ is required (Playwright's own declared minimum) - found "
+      . ( defined $major ? "v$major" : "an unrecognized 'node --version' output" )
+      . ". Please upgrade Node.js.\n"
+      if !defined $major || $major < $minimum;
+    return 1;
 }
 
 sub _run_quiet_command {
