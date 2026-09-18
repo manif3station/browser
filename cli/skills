@@ -17,6 +17,6 @@ browser.skills - Print the raw browser skill agent manual
 
 =head1 SYNOPSIS
 
-  d2 browser.skills
+  dashboard browser.skills
 
 =cut

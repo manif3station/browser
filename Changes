@@ -1,7 +1,19 @@
 Revision history for browser
 
+0.87 2026-09-18
+ - fix cli/skills's POD SYNOPSIS, which said 'd2 browser.skills' - the only 'd2'-prefixed invocation anywhere in this repo's docs; every other doc (SKILLS.md, README.md, docs/overview.md, docs/usage.md) consistently says 'dashboard browser.skills'. cli/skills is the only cli/* script with any POD at all, so this wrong prefix sat uncontested since it was introduced in 0.83 (D2B-097). Found by JOB-005 doc-accuracy hunt (D2B-102)
+
+0.86 2026-09-18
+ - fix docs/overview.md's Purpose and Delivery sections omitting browser.skills/cli/skills/SKILLS.md, added by D2B-097 (0.82) but never folded back into this overview doc - found by an idle-time doc-accuracy check while the board waited on owner review (D2B-101)
+
+0.85 2026-09-18
+ - fix docs/usage.md's Edge Cases section omitting several README.md Edge Cases entries beyond --help (Codex-found gap during D2B-099's own round-1 review) - added 6 genuinely undocumented-anywhere bullets (controller-mode selector guessing, intermediate-click navigation, account-state-dependent login destinations, URL literal "0" acceptance, --browser value validation, --timeout-ms negativity on get/post/png) and one cross-reference bullet naming the remaining README items that are already documented elsewhere in this file (Captcha Detection / Interactive Mode / jQuery Mode / Search Mode sections) rather than duplicated in Edge Cases (D2B-100)
+
+0.84 2026-09-18
+ - fix docs/usage.md's Edge Cases section missing the --help entry README.md's parallel list has (README's #30) - --help was only mentioned in usage.md's Commands section, not its own Edge Cases section (docs/usage.md's Edge Cases list is a shorter subset of README's 30-item list generally, not a lockstep mirror; this ticket only closes the --help gap, not the pre-existing broader gap). Also corrected an inaccuracy found in the same pass: the 0.83 entry below claimed "all 3 occurrences" of the wrong tickets/TESTING.md path, but D2B-098's own review found and fixed 4. Found by JOB-005 doc-accuracy hunt (D2B-099)
+
 0.83 2026-09-18
- - fix tickets/TESTING.md's documented Docker/host test commands - all 3 occurrences said 'cd .../browser' instead of 'cd .../browser/CODE' (the actual code lives one level deeper), so the documented commands failed before any testing happened. Found by Codex review while verifying an unrelated ticket (D2B-098)
+ - fix tickets/TESTING.md's documented Docker/host test commands - all 4 occurrences (2 Docker paths, 1 host path, and a DD-source-proof cp source found in a second Codex review round) said 'cd .../browser'/'cp .../browser' instead of 'cd .../browser/CODE'/'cp .../browser/CODE' (the actual code lives one level deeper), so the documented commands failed before any testing happened. Found by Codex review while verifying an unrelated ticket (D2B-098)
 
 0.82 2026-09-18
  - add browser.skills, printing a new SKILLS.md agent manual (condensed from README.md/docs/usage.md for an agent audience: commands, flags, result payload shape, prerequisites, disclosed limitations, layout), following the same cli/skills pattern tira already uses. 5 Codex review rounds - round 4 caught a critical issue: SKILLS.md was excluded by a global ~/.gitignore rule and would never have been committed; fixed with a repo-local .gitignore negation rule, leaving the global gitignore untouched (owner directive, D2B-097)
