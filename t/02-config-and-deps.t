@@ -31,7 +31,7 @@ my $cpanfile = do {
     local $/;
     <$fh>;
 };
-like( $cpanfile, qr/requires 'Playwright';/, 'cpanfile includes the Playwright module' );
+like( $cpanfile, qr/requires 'Playwright', '>= 1\.621';/, 'cpanfile pins Playwright to the exact minimum version confirmed installed/tested in the perl-test container (D2B-067)' );
 
 my $package_json = do {
     open my $fh, '<', 'package.json' or die "Unable to read package.json: $!";
@@ -46,6 +46,19 @@ like( $package_json, qr/"uuid"\s*:\s*"\^11\.0\.0"/, 'package.json pins uuid to t
 
 my ($declared_version) = $package_json =~ /"version"\s*:\s*"([^"]+)"/;
 like( $declared_version, qr/\A(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\z/, 'package.json\'s version field is valid SemVer with no leading zeros in any numeric component' );
+
+my $env_file = do {
+    open my $fh, '<', '.env' or die "Unable to read .env: $!";
+    local $/;
+    <$fh>;
+};
+my ($env_version) = $env_file =~ /^VERSION=(\d+\.\d+)$/m;
+ok( defined $env_version, '.env declares a VERSION in the expected N.N format' );
+
+my ($declared_major_minor) = $declared_version =~ /\A(\d+\.\d+)\./;
+ok( defined $declared_major_minor, 'package.json\'s version has a major.minor prefix to compare against .env' );
+
+is( $declared_major_minor, $env_version, 'package.json\'s version field stays in sync with .env\'s VERSION (D2B-074)' );
 
 my %launch = Browser::Runner::BrowserPath::_launch_options(
     browser  => 'chrome',

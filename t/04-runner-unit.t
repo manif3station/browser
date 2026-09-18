@@ -10,6 +10,9 @@ use Test::More;
 use lib 'lib';
 use Browser::Runner;
 
+## Test doubles: fake Playwright/Page/Browser/Request/Response objects
+## used by the integration-style tests throughout this file.
+
 {
     package FakeResponse;
 
@@ -30,9 +33,10 @@ use Browser::Runner;
         push @{ $self->{calls} }, { url => $url, options => $options };
         return FakeResponse->new(
             {
-                status  => 201,
-                body    => defined $options && defined $options->{data} ? $options->{data} : 'posted',
-                headers => { 'content-type' => 'text/plain' },
+                status  => $self->{response_status}  || 201,
+                body    => defined $self->{response_body} ? $self->{response_body}
+                         : ( defined $options && defined $options->{data} ? $options->{data} : 'posted' ),
+                headers => $self->{response_headers} || { 'content-type' => 'text/plain' },
                 url     => $url,
             }
         );
@@ -87,6 +91,12 @@ use Browser::Runner;
 my $runner = Browser::Runner->new();
 isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner object' );
 
+## Node runtime / package.json dependency management unit tests
+## (Browser::Runner::NodeRuntime's manifest parsing, fingerprinting,
+## and version-spec matching - install/staging behavior itself is
+## covered separately, further down, by the _ensure_node_runtime /
+## _install_node_runtime section).
+
 {
     my $temp_root = tempdir( CLEANUP => 1 );
     my $package_json = File::Spec->catfile( $temp_root, 'package.json' );
@@ -134,8 +144,27 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'node runtime is stale when required node_modules and the runtime stamp are absent'
     );
 
-    for my $module ( Browser::Runner::NodeRuntime::_required_node_modules() ) {
+    for my $module ( Browser::Runner::NodeRuntime::_required_node_modules($package_json) ) {
         make_path( File::Spec->catdir( $temp_root, 'node_modules', $module ) );
+    }
+
+    # D2B-068: _required_node_modules must derive its list from the
+    # package.json it's given, not a hardcoded literal, so a manifest
+    # that gains/loses/renames a dependency is reflected automatically.
+    # Uses a distinct fixture with a uniquely-named dependency NOT in the
+    # old hardcoded qw(express jquery playwright uuid) literal, and
+    # omitting one of those four - this would fail if the implementation
+    # still silently returned the old hardcoded list instead of deriving.
+    {
+        my $distinct_package_json = File::Spec->catfile( $temp_root, 'distinct-package.json' );
+        open my $distinct_fh, '>', $distinct_package_json or die "Unable to write distinct temp package.json: $!";
+        print {$distinct_fh} qq|{"dependencies":{"jquery":"^3.7.1","totally-unique-dependency-xyz":"^1.0.0"}}\n|;
+        close $distinct_fh or die "Unable to close distinct temp package.json: $!";
+        is_deeply(
+            [ sort( Browser::Runner::NodeRuntime::_required_node_modules($distinct_package_json) ) ],
+            [ 'jquery', 'totally-unique-dependency-xyz' ],
+            '_required_node_modules reflects a distinct package.json (with a uniquely-named dependency and one old module omitted), proving it derives rather than returning the old hardcoded literal'
+        );
     }
 
     ok(
@@ -216,6 +245,9 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3', '*' ), 'version_satisfies_spec accepts wildcard specs' );
     ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3', 'latest' ), 'version_satisfies_spec accepts latest specs' );
     ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( 'not-a-version', '^1.2.3' ), 'version_satisfies_spec rejects non-numeric installed versions' );
+    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3-beta.1', '^1.2.3' ), 'version_satisfies_spec (D2B-071) rejects a pre-release install against a caret range targeting the release version' );
+    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.4', '^1.2.3' ), 'version_satisfies_spec still accepts a genuine release version satisfying the range' );
+    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3-beta.1', '^1.2.3-beta.1' ), 'version_satisfies_spec (D2B-071) accepts a pre-release install when the spec\'s own minimum is that exact same pre-release string' );
     ok( !defined scalar Browser::Runner::NodeRuntime::_version_parts(undef), 'version_parts returns undef for missing versions' );
     ok( !defined scalar Browser::Runner::NodeRuntime::_version_parts('not-a-version'), 'version_parts returns undef for non-numeric versions' );
     {
@@ -242,6 +274,7 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         !-e File::Spec->catdir( $temp_root, 'node_modules', 'express' ),
         'clear_installed_node_modules removes one installed dependency tree'
     );
+
     for my $module (
         [ express    => '5.1.2' ],
         [ jquery     => '3.7.1' ],
@@ -264,10 +297,27 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         ),
         'installed_modules_satisfy_package_json rejects missing installed module metadata'
     );
-    open my $reinstall_uuid_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', 'uuid', 'package.json' )
+    my $uuid_package_json = File::Spec->catfile( $temp_root, 'node_modules', 'uuid', 'package.json' );
+    open my $reinstall_uuid_fh, '>', $uuid_package_json
       or die "Unable to rewrite temp installed uuid package metadata: $!";
     print {$reinstall_uuid_fh} qq|{"name":"uuid","version":"12.0.0"}\n|;
     close $reinstall_uuid_fh or die "Unable to close rewritten temp installed uuid package metadata: $!";
+
+    # _installed_node_module_version now reads through the same shared,
+    # mtime-keyed cache _read_package_json uses for the skill's own
+    # package.json (D2B-053). In real use that cache is always cleared at
+    # the very start of _ensure_node_runtime, before any installed-module
+    # check runs, so a genuine re-install between two _ensure_node_runtime
+    # calls is never served stale data. This test calls
+    # _installed_modules_satisfy_package_json directly, bypassing that
+    # clear, on the SAME path within the same process - a real risk of
+    # colliding with an earlier cache entry under coarse filesystem mtime
+    # resolution (seconds, not sub-second) if the rewrite above landed in
+    # the same tick as an earlier read of this same file. Force a mtime
+    # one second in the future so this test's own two back-to-back
+    # rewrites can never collide, the same technique D2B-024's own test
+    # (t/20-d2b-024-package-json-single-read.t) uses for the same reason.
+    utime( time() + 1, time() + 1, $uuid_package_json ) or die "Unable to set mtime on rewritten temp installed uuid package metadata: $!";
     ok(
         !Browser::Runner::NodeRuntime::_installed_modules_satisfy_package_json(
             home_root    => $temp_root,
@@ -276,6 +326,8 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'installed_modules_satisfy_package_json rejects installed versions that do not satisfy the manifest'
     );
 }
+
+## GET request tests: basic request/response payload shape.
 
 my $get_page = FakePage->new(
     {
@@ -313,6 +365,24 @@ is( $get_result->{script_result}, 'script-value', 'GET payload keeps the script 
 is( $get_playwright->{quit_count}, 1, 'request quits the Playwright handle after GET' );
 is( $get_playwright->{launch_args}{type}, 'chrome', 'normal GET keeps the browser type launch option' );
 
+# D2B-065: a legitimate page title of "0" must not become an empty string.
+{
+    my $zero_title_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 200 } ),
+            url      => 'https://example.test/final',
+            title    => '0',
+            content  => '<html></html>',
+        }
+    );
+    my $zero_title_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $zero_title_page } ) } );
+    my $zero_title_runner = Browser::Runner->new( playwright_factory => sub { return $zero_title_playwright } );
+    my $zero_title_result = $zero_title_runner->request( method => 'GET', url => 'https://example.test' );
+    is( $zero_title_result->{title}, '0', 'GET preserves a legitimate title of "0" instead of falling back to empty string' );
+}
+
+## PNG/screenshot request tests.
+
 my $png_temp = tempdir( CLEANUP => 1 );
 my $png_page = FakePage->new(
     {
@@ -341,6 +411,65 @@ is( $png_result->{file}, File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG payl
 is( $png_page->{screenshot_args}{path}, File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG request sends the normalized path to the screenshot helper' );
 ok( -f File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG request creates the screenshot file' );
 is( $png_playwright->{quit_count}, 1, 'request quits the Playwright handle after PNG' );
+
+# D2B-057: browser.png must not crash if page->title() throws after the
+# screenshot has already been written to disk successfully.
+{
+    my $crash_temp = tempdir( CLEANUP => 1 );
+    my $crash_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 200 } ),
+            url      => 'https://example.test/final',
+        }
+    );
+    no warnings 'redefine';
+    local *FakePage::title = sub { die "Target closed\n" };
+    my $crash_playwright = FakePlaywright->new(
+        {
+            browser => FakeBrowser->new( { page => $crash_page } ),
+        }
+    );
+    my $crash_runner = Browser::Runner->new(
+        playwright_factory => sub { return $crash_playwright },
+    );
+    my $crash_result = $crash_runner->request(
+        method => 'PNG',
+        url    => 'https://example.test',
+        file   => File::Spec->catfile( $crash_temp, 'shot' ),
+    );
+    is( $crash_result->{method}, 'PNG', 'PNG request survives a title() failure and still returns a PNG payload' );
+    is( $crash_result->{file}, File::Spec->catfile( $crash_temp, 'shot.png' ), 'PNG request still reports the screenshot path when title() throws' );
+    is( $crash_result->{title}, q{}, 'PNG request falls back to an empty-string title when title() throws' );
+    ok( -f File::Spec->catfile( $crash_temp, 'shot.png' ), 'the screenshot file is still written even though title() failed afterward' );
+}
+{
+    my $zero_temp = tempdir( CLEANUP => 1 );
+    my $zero_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 200 } ),
+            url      => 'https://example.test/final',
+            title    => '0',
+        }
+    );
+    my $zero_playwright = FakePlaywright->new(
+        {
+            browser => FakeBrowser->new( { page => $zero_page } ),
+        }
+    );
+    my $zero_runner = Browser::Runner->new(
+        playwright_factory => sub { return $zero_playwright },
+    );
+    my $zero_result = $zero_runner->request(
+        method => 'PNG',
+        url    => 'https://example.test',
+        file   => File::Spec->catfile( $zero_temp, 'shot' ),
+    );
+    is( $zero_result->{title}, '0', 'PNG request preserves a legitimate title of "0" instead of falling back to empty string' );
+}
+
+## GET request tests, continued: interactive/ask mode, jquery injection,
+## controller (Perl-scripted) mode, timeout overrides, and the
+## no-explicit-factory fallback path.
 
 my $interactive_page = FakePage->new(
     {
@@ -550,6 +679,9 @@ is( $timeout_page->{goto_args}[1]{timeout}, 45000, 'interactive GET respects an 
     is( $auto_result->{status}, 204, 'request falls back to _new_playwright when no factory is configured' );
 }
 
+## POST request tests: basic request/response payload shape, captcha
+## detection edge cases, no-body requests, and controller mode.
+
 my $post_page = FakePage->new(
     {
         request         => FakeRequest->new( { calls => [] } ),
@@ -583,6 +715,57 @@ ok( !$post_result->{is_captcha}, 'POST payload does not mark normal pages as cap
 like( $post_page->{set_content}, qr/browser-post-body/, 'POST payloads wrap plain text into a DOM document' );
 is( $post_page->{request}{calls}[0]{options}{data}, 'name=dashboard', 'POST passes request data through' );
 is( $post_playwright->{quit_count}, 1, 'request quits the Playwright handle after POST' );
+
+# D2B-084: _run_post used to check is_captcha against the wrapped/escaped
+# $html handed to setContent, not the raw response body - so a real
+# captcha widget served as a bare fragment (no explicit text/html
+# content-type) got HTML-escaped by _response_document before
+# _is_captcha_page ever saw it, and the escaping destroyed the literal
+# tag/attribute structure D2B-083's fix requires to detect a real
+# widget. This proves browser.post correctly flags a real captcha
+# response even when _response_document would otherwise wrap/escape it.
+{
+    my $captcha_post_page = FakePage->new(
+        {
+            request         => FakeRequest->new(
+                {
+                    calls             => [],
+                    response_body     => '<div class="g-recaptcha" data-sitekey="x"></div>',
+                    response_headers  => {},
+                }
+            ),
+            title           => 'Example',
+            body_text       => q{},
+            evaluate_return => undef,
+        }
+    );
+    my $captcha_post_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $captcha_post_page } ) } );
+    my $captcha_post_runner = Browser::Runner->new( playwright_factory => sub { return $captcha_post_playwright } );
+    my $captcha_post_result = $captcha_post_runner->request( method => 'POST', url => 'https://example.test/challenge' );
+    ok( $captcha_post_result->{is_captcha}, 'browser.post flags a real captcha widget served as a bare fragment with no explicit HTML content-type' );
+}
+
+# D2B-065: same fix applied to _run_post for consistency with _run_get and
+# _run_png (all three now use _defined_or_empty). _run_post's result never
+# exposes title directly (only GET does) and title is only consumed
+# internally by the captcha check, where "0" and "" behave identically -
+# so this is a defensive-correctness fix with no directly observable
+# behavior difference for POST today. This is a smoke test proving the
+# code path with a "0" title still runs cleanly with no die/warning.
+{
+    my $zero_title_post_page = FakePage->new(
+        {
+            request => FakeRequest->new( { calls => [] } ),
+            title   => '0',
+            body_text => q{},
+        }
+    );
+    my $zero_title_post_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $zero_title_post_page } ) } );
+    my $zero_title_post_runner = Browser::Runner->new( playwright_factory => sub { return $zero_title_post_playwright } );
+    my $zero_title_post_result = eval { $zero_title_post_runner->request( method => 'POST', url => 'https://example.test/form' ) };
+    ok( !$@, 'POST with a "0" page title runs cleanly with no die' ) or diag("Died with: $@");
+    ok( !$zero_title_post_result->{is_captcha}, 'POST with title "0" is correctly not flagged as captcha' );
+}
 
 my $post_no_data_page = FakePage->new(
     {
@@ -633,6 +816,9 @@ is( $controller_post_result->{final_url}, 'https://example.test/dashboard', 'POS
 is( $controller_post_result->{script_result}{method}, 'POST', 'POST controller mode exposes the request method to the Perl script' );
 is( $controller_post_result->{script_result}{requested}, 'https://example.test/post', 'POST controller mode exposes the requested URL to the Perl script' );
 
+## Error-handling tests: browser errors are rethrown/cleaned up
+## correctly, and unsupported HTTP methods are rejected.
+
 my $error_playwright = FakePlaywright->new(
     {
         browser => FakeBrowser->new(
@@ -660,6 +846,10 @@ is( $error_playwright->{quit_count}, 1, 'request still quits the Playwright hand
 
 eval { $runner->request( method => 'DELETE', url => 'https://example.test' ) };
 like( $@, qr/Unsupported method: DELETE/, 'request rejects unsupported methods' );
+
+## _run_controller_script unit tests: direct calls to the controller
+## helper (independent of the higher-level GET/POST integration tests
+## above, which already exercise it through request()).
 
 eval {
     Browser::Runner::_run_controller_script(
@@ -707,6 +897,9 @@ eval {
     );
 };
 like( $@, qr/Controller mode requires --script/, 'controller helper rejects missing scripts' );
+
+## Browser::Runner::BrowserPath unit tests: launch-option construction
+## and Chromium/Chrome binary detection/validation.
 
 {
     local $ENV{CHROMIUM_BIN};
@@ -815,6 +1008,8 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     like( join( "\n", @candidates ), qr/\Q$temp_root\E\/Applications\/Chromium\.app\/Contents\/MacOS\/Chromium/, 'browser_candidates includes home-local macOS Chromium app paths for validation' );
 }
 
+## Browser::Runner::NodeRuntime::_skill_root unit tests.
+
 {
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = '/tmp/browser-skill-root';
     is( Browser::Runner::NodeRuntime::_skill_root(), '/tmp/browser-skill-root', 'skill root prefers the DD skill root environment variable' );
@@ -842,6 +1037,10 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     like( Browser::Runner::NodeRuntime::_skill_root(), qr/(?:\.|skills\/browser)\z/, 'skill root can fall back to the module path' );
     chdir $cwd or die "Unable to restore cwd after module-path fallback test: $!";
 }
+
+## _ensure_node_runtime / _install_node_runtime unit tests: the
+## npx-staged npm install flow, its success and failure paths, and
+## the HOME/package.json precondition checks.
 
 {
     my $temp_root = tempdir( CLEANUP => 1 );
@@ -1016,6 +1215,8 @@ like( $@, qr/Command failed/, '_run_quiet_command reports failed commands' );
 my $quiet_command_exit = Browser::Runner::NodeRuntime::_run_quiet_command('true');
 is( $quiet_command_exit, 0, '_run_quiet_command returns zero for a successful command' );
 
+## _new_playwright unit test.
+
 {
     no warnings 'redefine';
     local *Browser::Runner::NodeRuntime::_ensure_node_runtime = sub { return '/tmp/browser-node'; };
@@ -1029,6 +1230,8 @@ is( $quiet_command_exit, 0, '_run_quiet_command returns zero for a successful co
     is( ref $playwright, 'Playwright', '_new_playwright loads and instantiates Playwright' );
 }
 
+## _is_captcha_page / _page_text / _goto_options unit tests.
+
 ok( Browser::Runner::_is_captcha_page( title => 'Captcha Check', body => '<script src=\"recaptcha\"></script>', body_text => 'unusual traffic' ), 'captcha helper detects captcha-like pages' );
 ok( !Browser::Runner::_is_captcha_page( title => 'Normal', body => '<html>ok</html>', body_text => 'hello world' ), 'captcha helper ignores normal pages' );
 is( Browser::Runner::_page_text( FakePage->new( { body_text => "Hello\n" } ) ), "Hello\n", 'page_text extracts body text through the page helper' );
@@ -1039,6 +1242,35 @@ is_deeply( Browser::Runner::_goto_options( wait_until => 'load' ), { waitUntil =
 is_deeply( Browser::Runner::_goto_options( wait_until => 'domcontentloaded' ), { waitUntil => 'domcontentloaded' }, 'goto_options accepts explicit domcontentloaded mode' );
 eval { Browser::Runner::_goto_options( wait_until => 'invalid' ) };
 like( $@, qr/Unsupported wait-until mode/, 'goto_options rejects unsupported wait-until modes' );
+
+# D2B-066: an explicitly-passed empty --wait-until must not be silently
+# treated the same as "not given" - it should hit the same validation
+# error as any other unsupported value.
+eval { Browser::Runner::_goto_options( wait_until => q{} ) };
+like( $@, qr/Unsupported wait-until mode/, 'goto_options refuses an explicit empty-string --wait-until instead of silently defaulting' );
+
+## _response_document / _escape_html unit tests.
+
+# D2B-075: _response_document must not let its tag-shape heuristic
+# override an explicit JSON content_type (the tag-shape trust heuristic
+# is intentionally still applied to other non-JSON, non-HTML content
+# types such as application/xml, and to text/plain/unlabeled bodies -
+# see D2B-032, whose own test relies on that).
+is(
+    Browser::Runner::_response_document( body => '<data>foo</data>', content_type => 'application/json' ),
+    '<!doctype html><html><head><meta charset="utf-8"><title>browser.post</title></head><body><pre id="browser-post-body">&lt;data&gt;foo&lt;/data&gt;</pre></body></html>',
+    '_response_document wraps a tag-shaped body when content_type explicitly names a JSON type'
+);
+is(
+    Browser::Runner::_response_document( body => '<data>foo</data>', content_type => 'text/html' ),
+    '<data>foo</data>',
+    '_response_document takes the direct text/html content-type path (not the tag-shape heuristic) and returns the body unwrapped'
+);
+
+# D2B-076: _escape_html must also escape quote characters, not just &<>.
+is( Browser::Runner::_escape_html(q{he said "hi" & 'bye'}), 'he said &quot;hi&quot; &amp; &#39;bye&#39;', '_escape_html escapes double and single quotes in addition to &, <, >' );
+## _jquery_path / _maybe_inject_jquery unit tests.
+
 {
     my $temp_root = tempdir( CLEANUP => 1 );
     make_path( File::Spec->catdir( $temp_root, 'node_modules', 'jquery', 'dist' ) );
@@ -1066,10 +1298,59 @@ like( $@, qr/Unsupported wait-until mode/, 'goto_options rejects unsupported wai
     is( $page->{script_tags}[0]{path}, File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ), 'maybe_inject_jquery uses the jquery runtime path' );
     is( Browser::Runner::_maybe_inject_jquery( $page ), 0, 'maybe_inject_jquery is a no-op when jquery mode is off' );
 }
+## _await_user / _interact_and_run_script unit tests.
+
 my $await_prompt = q{};
 open my $await_prompt_fh, '>', \$await_prompt or die "Unable to open await prompt scalar: $!";
 my $await_input = "\n";
 open my $await_input_fh, '<', \$await_input or die "Unable to open await input scalar: $!";
 ok( Browser::Runner::_await_user( input_fh => $await_input_fh, prompt_fh => $await_prompt_fh ), 'await_user returns success after the user confirms' );
 like( $await_prompt, qr/press Enter to continue/i, 'await_user emits the interactive prompt' );
+
+# D2B-056: _interact_and_run_script is the shared helper extracted from the
+# duplicated interactive/jquery/script sequence in _run_get/_run_post.
+{
+    my $script_prompt = q{};
+    open my $script_prompt_fh, '>', \$script_prompt or die "Unable to open scalar for interact test: $!";
+    my $script_input = "\n";
+    open my $script_input_fh, '<', \$script_input or die "Unable to open scalar for interact test: $!";
+    my $page = FakePage->new( { evaluate_return => 'script-ran' } );
+    my $result = Browser::Runner::_interact_and_run_script(
+        $page,
+        interactive => 1,
+        script      => 'return 1',
+        input_fh    => $script_input_fh,
+        prompt_fh   => $script_prompt_fh,
+    );
+    like( $script_prompt, qr/press Enter to continue/i, '_interact_and_run_script awaits the user when interactive is set' );
+    is( $result, 'script-ran', '_interact_and_run_script returns the script result' );
+}
+{
+    my $temp_root = tempdir( CLEANUP => 1 );
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'jquery', 'dist' ) );
+    open my $jquery_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ) or die "Unable to write temp jquery runtime for interact test: $!";
+    print {$jquery_fh} "/* jquery */\n";
+    close $jquery_fh or die "Unable to close temp jquery runtime for interact test: $!";
+    local $ENV{HOME} = $temp_root;
+
+    my @call_order;
+    my $page = FakePage->new( { evaluate_return => 'script-ran' } );
+    no warnings 'redefine';
+    local *FakePage::addScriptTag = sub { push @call_order, 'jquery'; push @{ $_[0]{script_tags} }, $_[1]; return 1 };
+    local *FakePage::evaluate     = sub { push @call_order, 'script'; return $_[0]{evaluate_return} };
+
+    my $result = Browser::Runner::_interact_and_run_script(
+        $page,
+        jquery => 1,
+        script => 'return 1',
+    );
+    is( $result, 'script-ran', '_interact_and_run_script returns the script result when jquery mode is also on' );
+    is_deeply( \@call_order, [ 'jquery', 'script' ], '_interact_and_run_script injects jquery before running the script, not after' );
+}
+{
+    my $page = FakePage->new( {} );
+    my $result = Browser::Runner::_interact_and_run_script( $page );
+    is( $result, undef, '_interact_and_run_script is a no-op pass-through when no script/interactive/jquery options are given' );
+}
+
 done_testing();

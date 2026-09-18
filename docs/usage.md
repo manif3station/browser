@@ -20,7 +20,10 @@ dashboard browser.png https://example.com --file /tmp/example-shot
 dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
 dashboard browser.search 'query' --engine google
 dashboard browser.search 'query' --engines duckduckgo,bing --max 5
+dashboard browser.get https://example.com --no-headless
 ```
+
+`browser.get`/`browser.post`/`browser.png` all run headless by default; `--headless`/`--no-headless` sets it explicitly, useful for watching a non-interactive run without pausing for manual input. `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect on a non-interactive run.
 
 Local repository usage during development:
 
@@ -156,7 +159,7 @@ dashboard browser.get https://example.com --jquery --script 'return window.jQuer
 
 ## Interactive Mode
 
-`browser.get` accepts `--ask` and `--askme` as the same interactive mode.
+`browser.get`, `browser.post`, and `browser.png` all accept `--ask` and `--askme` as the same interactive mode - they are declared once in the shared CLI option parsing all three methods use, not just for `browser.get`.
 
 When used:
 
@@ -201,15 +204,31 @@ Only the remaining examples in `README.md` are treated as proven examples.
 
 The skill marks a response as captcha-like only when the page's HTML
 (the current DOM for `browser.get`, or the response HTML being inspected
-for `browser.post`) contains one of four specific substrings associated
-with real reCAPTCHA/hCaptcha embeds (`g-recaptcha`, `h-captcha`,
-`recaptcha/api`, `hcaptcha.com`), or when the page **title** matches a
-challenge phrase (`captcha`, `unusual traffic`, `verify you are human`).
-It is a plain case-insensitive substring match, not markup validation,
-and it does not scan the page's visible rendered text (`body_text`) for a
-bare mention of "captcha" - an ordinary page whose body text merely
-discusses captchas, without one of those four markers actually present in
-the HTML, is not flagged.
+for `browser.post`) contains a real, unescaped opening tag with a
+`class` attribute whose value contains `g-recaptcha`/`h-captcha`, or a
+`src`/`action` attribute whose value contains `recaptcha/api`/
+`hcaptcha.com` (quoted or unquoted) - or when the page **title**
+matches a challenge phrase (`captcha`, `unusual traffic`, `verify you
+are human`). This is still a substring check within the matched
+attribute value, not exact-value matching or full markup validation, so
+an unrelated compound class name that happens to contain `g-recaptcha`
+as a substring (or the same markup appearing inside an HTML comment)
+can still false-positive; requiring a literal `<...>` tag around the
+attribute is specifically what stops the common case this ticket
+exists to fix - a documentation or tutorial page merely *showing*
+example widget-integration markup inside a `<pre>` block,
+HTML-entity-escaped so it contains no real `<`/`>` characters even
+though the attribute text itself survives the escaping untouched
+(D2B-083). The title check matches the whole word `captcha`
+(so a plural like "CAPTCHAs" is not matched), plus a separate
+case-insensitive substring check specifically for `recaptcha` so a title
+like "reCAPTCHA verification required" is also caught - this second
+check is deliberately narrow to `recaptcha` rather than any word ending
+in `captcha`, so an unrelated title like "NoCaptcha documentation" is
+not flagged. Neither check scans the page's visible rendered text
+(`body_text`) for a bare mention of "captcha" - an ordinary page whose
+body text merely discusses captchas, without one of those four markers
+actually present in the HTML or a matching title, is not flagged.
 
 This is intended as a practical CLI signal, not a perfect classifier.
 
@@ -217,9 +236,9 @@ This is intended as a practical CLI signal, not a perfect classifier.
 
 `browser.search <query>` drives `browser.get`'s own GET path against an ordered list of search engines and returns structured results instead of raw HTML. Like `browser.get`, it always launches headless - there is no interactive/`--ask` mode for search.
 
-The default engine order is `bing`, `google`, `duckduckgo`. For each engine in order, the skill checks the same `is_captcha` flag `browser.get` already computes on the response; if it is true, that engine is skipped and the next one is tried. The response payload names `engine_used` (which engine actually served the results) and `engines_tried` (every engine attempted, in order).
+The default engine order is `bing`, `google`, `duckduckgo`. For each engine in order, the skill checks the same `is_captcha` flag `browser.get` already computes on the response; if it is true, that engine is skipped and the next one is tried. An engine whose result markup no longer matches its parser (e.g. the site's layout changed) is likewise skipped and the next engine tried, rather than returning an empty result set as if the query genuinely had no results - this is a heuristic keyed on response size: a response body longer than 200 characters that parses to zero results is treated as a markup-drift failure (not the last engine), while a short/trivial body parsing to zero results is treated as a genuine no-results page. Because this is a heuristic, not a certainty, a genuinely large "no results found" page from a real search engine could still be misclassified as markup drift and skipped in favor of trying the next engine - only when every engine has been tried does an empty result set come back as success either way. The response payload names `engine_used` (which engine actually served the results) and `engines_tried` (every engine attempted, in order).
 
-Each result has `rank`, `title`, `url`, and `snippet`, extracted from that engine's own result markup. A layout change on one engine's search page only affects that engine's own parser. `title` and `snippet` have common HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, and numeric decimal/hex entities like `&#39;`/`&#x27;`) decoded, so they contain the real characters rather than literal entity text. This decoding requires the trailing semicolon and is a single pass (a double-encoded `&amp;amp;` decodes once, to `&amp;`, not recursively to `&`); an entity outside the valid Unicode range is left as literal text rather than raising an error.
+Each result has `rank`, `title`, `url`, and `snippet`, extracted from that engine's own result markup. A layout change on one engine's search page only affects that engine's own parser. `title`, `snippet`, and `url` have common HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, and numeric decimal/hex entities like `&#39;`/`&#x27;`) decoded, so they contain the real characters rather than literal entity text. `url` needs this as much as the text fields do: result markup routinely HTML-entity-encodes the `&` separating query-string parameters inside an `href`, and without decoding, `url` would contain the literal `&amp;` sequence instead of `&`, silently corrupting the query string for anything that re-uses that URL (e.g. feeding it back into `browser.get`). This decoding requires the trailing semicolon and is a single pass (a double-encoded `&amp;amp;` decodes once, to `&amp;`, not recursively to `&`); an entity outside the valid Unicode range, or naming a UTF-16 surrogate codepoint (`&#xD800;`-`&#xDFFF;`, decimal or hex), is left as literal entity text rather than decoded - a surrogate codepoint is not a valid standalone Unicode character, and decoding one would produce invalid UTF-8 in the JSON payload instead of a real character.
 
 Example payload shape:
 
@@ -227,7 +246,7 @@ Example payload shape:
 {"query":"which mini PC can run a ~30B Qwen3 at 1M context","engine_used":"bing","engines_tried":["bing"],"results":[{"rank":1,"title":"...","url":"...","snippet":"..."}]}
 ```
 
-`--engine NAME` restricts the search to one named engine (refused if the engine isn't one of the defaults). `--engines a,b,c` overrides the whole order; whitespace around each comma-separated name is tolerated (e.g. `--engines "bing, google"`), so a human-typed list with spaces doesn't fail with "Unknown engine". Engine name matching is case-insensitive (`--engine Bing` and `--engines DuckDuckGo,BING` both work). A repeated name in the list (e.g. `--engines bing,bing`) is deduplicated, preserving the order of first occurrence, so a walled engine is never retried a second time. `--max N` caps how many results are returned (default 10). `--timeout-ms N` bounds each individual engine attempt (default 10000) - a slow/unresponsive engine fails fast instead of exhausting Playwright's own longer internal default before moving to the next engine.
+`--engine NAME` restricts the search to one named engine (refused if the engine isn't one of the defaults). `--engines a,b,c` overrides the whole order; whitespace around each comma-separated name is tolerated (e.g. `--engines "bing, google"`), so a human-typed list with spaces doesn't fail with "Unknown engine". Engine name matching is case-insensitive (`--engine Bing` and `--engines DuckDuckGo,BING` both work). A repeated name in the list (e.g. `--engines bing,bing`) is deduplicated, preserving the order of first occurrence, so a walled engine is never retried a second time. `--max N` caps how many results are returned (default 10) - a negative value is refused with "--max must not be negative". `--timeout-ms N` bounds each individual engine attempt (default 10000) - a slow/unresponsive engine fails fast instead of exhausting Playwright's own longer internal default before moving to the next engine; a negative value is likewise refused with "--timeout-ms must not be negative" rather than being passed through unchecked to Playwright's own timeout option.
 
 If every engine in the list comes back walled, the command refuses with a structured error naming each one and pointing to `browser.get --ask` for interactive use, rather than hanging or returning an empty success.
 
@@ -236,7 +255,7 @@ If every engine in the list comes back walled, the command refuses with a struct
 - if the skill is not installed, `dashboard browser.get` and `dashboard browser.post` will not dispatch
 - if Playwright dependencies are missing, the command will fail until DD installs the skill dependencies
 - if the target URL cannot be reached, Playwright raises an error and the command exits non-zero
-- if a POST response is not HTML, the skill wraps the body in a simple HTML document so a DOM-based script can still inspect it
+- if a POST response body is not explicitly HTML, the skill always wraps it in a simple HTML document (HTML-escaped inside a `<pre>` block) so a DOM-based script can still inspect it without any risk of embedded markup executing - a body is only ever trusted and returned unwrapped when the response's content type is *exactly* (ignoring parameters like `; charset=...`) `text/html` or `application/xhtml+xml`, or the body itself starts with a properly-bounded doctype/`<html>` tag (a header like `application/json; note=text/html`, or a body starting `<htmlscript>`, does not count); a bare fragment that merely *looks* tag-shaped (e.g. `<data>foo</data>`, or even a genuinely well-formed one like `<div><span>hi</span></div>`) but lacks that explicit HTML content-type declaration is always escaped/wrapped too (never trusted on its shape alone), since a hand-rolled tag-shape check cannot safely distinguish that from a crafted body smuggling a live `<script>` sibling past it via HTML's own implicit tag-closing rules (D2B-079)
 - if the Node runtime has not been installed from `package.json` yet, the first command run can take longer while the skill stages and installs `playwright`, `express`, `jquery`, and `uuid` into `$HOME/node_modules`
 - if `$HOME/node_modules` contains stale module trees from an older install, the skill clears the affected package directories and reinstalls them from the current `package.json`
 - if `CHROMIUM_BIN` is not set, the skill looks for a usable system Chromium or Chrome binary on `PATH`
@@ -246,3 +265,6 @@ If every engine in the list comes back walled, the command refuses with a struct
 - if `--ask` or `--askme` is used on a host without a display server, the headed browser launch can fail until the command is run in a desktop-capable environment
 - if a login page keeps long-lived background requests open, ask-mode avoids `networkidle` on the initial load so the browser session can stay open for manual work
 - if controller mode is used, write the script in single quotes so shell expansion does not consume Perl variables like `$page`
+- `--file` is refused on `browser.get`/`browser.post` with "--file is only read by browser.png - it has no effect on GET/POST" - only `browser.png` reads it
+- `browser.post`'s `final_url` reports the actual response URL, not the page's untouched `about:blank` default, for a plain POST that nothing navigates afterward - setContent() (used to inject the response body for display) does not itself navigate the page. The one disclosed limitation: if a controller script, the response body's own embedded script, or manual `--ask` interaction deliberately navigates the page back to literally `about:blank`, that is indistinguishable from never having navigated, and `final_url` still reports the response URL rather than the literal string `about:blank` in that rare case (D2B-092)
+- `browser.get`/`browser.post`/`browser.png` default to a headless browser; `--headless`/`--no-headless` sets it explicitly - but `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` (D2B-093)

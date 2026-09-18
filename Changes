@@ -1,5 +1,110 @@
 Revision history for browser
 
+0.78 2026-09-18
+ - document browser.get/post/png's already-working --headless/--no-headless flag - it defaults to headless=1 and correctly reaches Browser::Runner->request(), but was never mentioned in README.md or docs/usage.md. No code change; documentation only (D2B-093)
+
+0.77 2026-09-18
+ - fix browser.post's final_url result field always reporting about:blank instead of the actual response URL in non-controller mode - setContent() (used to inject the POST response body for display) never navigates the page, so $page->url() stayed at its pre-request value. Went through 4 rounds of Codex review: two earlier fix attempts (before/after URL-equality comparison, then a "did any --script run" check) each had a real hole a controller script, the response's own embedded script, or manual --ask interaction could exploit. Shipped fix checks the literal Playwright "about:blank" sentinel instead of inferring the cause, with one disclosed, accepted limitation: it cannot distinguish "never navigated" from "deliberately navigated back to about:blank" - documented in README edge case #27 and docs/usage.md (D2B-092)
+
+0.76 2026-09-18
+ - improve browser.get/post/png/search's invalid-option error to name the specific rejected flag - execute and execute_search's GetOptionsFromArray failure path previously discarded Getopt::Long's own specific rejection message (e.g. "Unknown option: bogus-flag") and raised the generic literal "Invalid options" instead, leaving a caller inspecting the error programmatically with no way to tell which option/value was wrong. Both call sites now capture Getopt::Long's warning via a local $SIG{__WARN__} and include it in the raised error (D2B-091)
+
+0.75 2026-09-18
+ - fix browser.search's result urls (from _parse_bing, _parse_google, _parse_duckduckgo) not having HTML entities decoded - unlike title/snippet (decoded via _strip_tags since D2B-050), the raw href capture was returned as-is. Real result markup routinely HTML-entity-encodes the & separating query-string parameters in an href, so url contained the literal &amp; sequence instead of &, corrupting the query string for anything that re-used the url (e.g. feeding it back into browser.get). Fixed by decoding the captured url through the existing _decode_entities helper in all three parsers (D2B-087)
+
+0.74 2026-09-18
+ - fix browser.search's --engines whitespace trim only stripping ASCII whitespace (Perl's \s by default) - a copy-pasted engine name padded with a non-breaking space, plausible from web pages or rich-text sources, survived the trim and was rejected as an unknown engine instead of matching. @ARGV arrives as raw, undecoded bytes (this codebase never decodes argv as UTF-8), so the fix matches the literal two-byte UTF-8 sequence for a non-breaking space (\xC2\xA0) rather than the decoded character, alongside D2B-041's existing ASCII-whitespace handling (D2B-086)
+
+0.73 2026-09-18
+ - internal refactor: t/04-runner-unit.t (1310 lines, grown through ~12 tickets this session with only 8 scattered ticket-number comments as topical anchors) gained 16 labeled section header comments at its existing natural content boundaries (GET/POST/PNG request tests, NodeRuntime/BrowserPath unit tests, _response_document/_escape_html/_is_captcha_page unit tests, controller-script/jquery/await-user helpers, etc.). Zero code movement, zero assertion changes - same 149/149 pass (D2B-085)
+
+0.72 2026-09-18
+ - fix browser.post's is_captcha check running against the wrapped/escaped HTML handed to setContent instead of the raw response body - _response_document's D2B-079 escaping (HTML-entity-encoding a bare fragment into a <pre> block, when the response has no explicit text/html content-type) destroyed the literal tag/attribute structure D2B-083's captcha check requires to detect a real widget, so a genuine captcha wall served as an untyped fragment silently reported is_captcha:false. _run_post now checks the raw pre-wrap body, matching how _run_get already checks the real rendered DOM. Added a true-positive POST captcha regression test (previously only false-positive-guard cases were covered for POST) (D2B-084)
+
+0.71 2026-09-18
+ - fix _is_captcha_page's raw-body-markup check ('g-recaptcha|h-captcha|recaptcha/api|hcaptcha.com') being a bare substring match, so a documentation page showing example widget-integration markup inside a <pre> block (HTML-entity-escaped, but the attribute text itself survives escaping since only < and > are escaped) was incorrectly flagged as a real challenge page - the same false-positive class D2B-009/D2B-073 closed for the title and rendered body_text checks, but neither touched this raw-body path. Narrowed to require the match appear inside a real, unescaped opening tag (a class="..." or src/action="..." attribute with a literal < and >) rather than a bare substring anywhere in the body, without attempting full HTML parsing or <pre>-block detection (D2B-083)
+
+0.70 2026-09-18
+ - fix README.md's Edge Cases list (item 6) describing the pre-D2B-079 tag-shape trust behavior as current - it still claimed a bare tag-shaped POST-response fragment like <div>...</div> with no content-type declaration was set as real DOM, when that exact behavior was removed this session as a script-injection vulnerability. Rewrote to match docs/usage.md's already-corrected wording: only an explicit text/html/application/xhtml+xml content type, or a properly-bounded doctype/<html> tag, is ever trusted raw (D2B-082)
+
+0.69 2026-09-18
+ - internal refactor: t/79-d2b-079-single-root-fragment-required.t (grown through D2B-079's 7 adversarial security-review rounds) had its test blocks reorganized into 4 clear thematic groups - the original vulnerability, content-type exact-match bypasses, body-sniff boundary bypasses, and the legitimate forms that must keep passing - each annotated with which review round found it, so the file reads as an ordered catalogue rather than the order each round happened to land in. Zero assertion changes, same 19/19 pass (D2B-081)
+
+0.68 2026-09-18
+ - internal refactor: D2B-079's ASCII HTML-whitespace character class was duplicated 7 times across _content_type_is_html and _response_document's two body-sniff regexes - exactly the kind of duplication that caused one of that ticket's 7 security-review rounds (a fix applied to one copy, missed in another). Extracted into a single shared $HTML_WS definition all 7 sites now reference, so a future fix to it can only happen once (D2B-080)
+
+0.67 2026-09-18
+ - SECURITY FIX: _response_document's tag-shape fallback for POST responses only checked that the body started with an opening tag and ended with a matching closing tag, with a greedy match in between - so sibling elements sharing the outer tag name (including an injected <script> sibling) satisfied it just as well as one genuinely nested element, and since the trusted result is handed to Playwright's page->setContent (which executes embedded <script> tags, unlike an innerHTML assignment), an attacker-controlled or compromised POST endpoint could execute arbitrary script in the automated browser context. A depth-tracking single-root replacement was tried but itself remained bypassable, because real HTML has implicit tag-closing rules (e.g. <p> auto-closes when a block element like <div> begins) that a hand-rolled tag-stack scanner cannot safely replicate without reimplementing HTML5 tree construction. The tag-shape trust path is now removed entirely: only an explicit text/html/xhtml+xml content type, or a body that itself starts with a doctype/<html> tag, is ever trusted as raw markup - everything else, including a legitimately well-formed bare fragment, is now escaped into the safe <pre> wrapping (a deliberate loss of D2B-008's "render untyped fragments as live markup" convenience, in favor of correctness); the remaining content-type/doctype checks that now form the entire trust boundary were themselves tightened from substring/unanchored matches (which let 'application/json; note=text/html' or '<htmlscript>' slip through as trusted) to exact media-type equality and boundary-checked body sniffs (D2B-079)
+
+0.66 2026-09-17
+ - fix package.json's own version field permanently stuck at 0.1.0 while .env's VERSION advanced to 0.42+ - confirmed via Developer-Dashboard source that no DD tooling reads this field, so rather than remove it outright (which would break the pre-existing SemVer-format test), synced it to 0.42.0 and added a drift-guard regression test asserting it stays equal to .env's VERSION going forward (D2B-074)
+
+0.65 2026-09-17
+ - internal refactor: t/01-cli.t's 7 near-identical stdout/stderr scalar-filehandle capture blocks around Browser::CLI::main() calls (~30 duplicated lines) are replaced by a single shared _capture_main(%args) helper - test-only change, no lib/ code touched, all existing assertions pass unchanged (D2B-072)
+
+0.64 2026-09-17
+ - fix cpanfile pinning no minimum version for Playwright, unlike package.json's strict semver ranges on the Node side - now requires 'Playwright', '>= 1.621' (the version confirmed installed and tested in the perl-test Docker container), so a fresh cpanm --installdeps . can't silently pull an incompatible older release (D2B-067)
+
+0.63 2026-09-17
+ - fix _escape_html not escaping double or single quote characters, an incomplete contract for a generically-named HTML-escaping helper - it now also escapes " to &quot; and ' to &#39;, matching the conventional full HTML-escape character set (D2B-076)
+
+0.61 2026-09-17
+ - internal refactor: _required_node_modules() now derives its module list from package.json's own dependency map instead of a hardcoded literal, so a manifest that gains/loses/renames a dependency is reflected automatically instead of silently drifting out of sync (D2B-068)
+
+0.60 2026-09-17
+ - fix _version_satisfies_spec incorrectly treating a SemVer pre-release version (e.g. "1.2.3-beta.1") as satisfying a caret range targeting the release version - a pre-release install now correctly fails to satisfy such a range unless it's the exact same pre-release string (D2B-071)
+
+0.59 2026-09-17
+ - fix _goto_options silently defaulting an explicit empty-string --wait-until instead of refusing it - the wait_until default-assignment now checks definedness instead of truthiness, so an explicit empty string correctly falls through to the existing "Unsupported wait-until mode" validation error (D2B-066)
+
+0.58 2026-09-17
+ - fix captcha title detection missing a realistic challenge title like "reCAPTCHA verification required" - the title check keeps its existing whole-word \bcaptcha\b match (so the plural "CAPTCHAs" is still not matched) and adds a separate, deliberately narrow "recaptcha" substring check just for the reCAPTCHA case, so an unrelated title ending in "captcha" (e.g. "NoCaptcha documentation") is not falsely flagged (D2B-073, supersedes and folds in the doc-accuracy finding D2B-062)
+
+0.57 2026-09-17
+ - fix _response_document letting a tag-shaped POST response body (e.g. "<data>foo</data>") pass through unwrapped even when content_type explicitly names a JSON type - the tag-shape trust heuristic now only applies when content_type does not name a JSON type, preserving the existing text/plain/unlabeled trust behavior from D2B-032 (D2B-075)
+
+0.56 2026-09-17
+ - internal refactor: _default_engines() entries now carry their own parser coderef, and _parse_results calls it directly instead of dispatching by engine-name string (falling back to the legacy name dispatch for a caller-supplied engine hash with no parser key); no observable behavior change (D2B-070)
+
+0.55 2026-09-17
+ - fix _run_get/_run_post silently converting a legitimate page title of "0" into an empty string, the same falsy-value flaw D2B-057 already fixed in _run_png - both now use the shared _defined_or_empty helper instead of the truthy "|| q{}" fallback (D2B-065)
+
+0.54 2026-09-17
+ - fix Browser::Search::search() not validating timeout_ms for negativity itself, relying solely on the CLI wrapper's guard (D2B-058) - a direct caller bypassing the CLI could pass a negative timeout_ms straight through to the runner unchecked; search() now refuses it directly too, as defense in depth (D2B-064)
+
+0.53 2026-09-17
+ - fix browser.search silently returning an empty result set when an engine's markup no longer matches its parser (e.g. the site's layout changed), instead of falling through to the next engine - search() now treats zero results over a substantial response body as a fall-through-worthy failure, matching the existing captcha/request-failure fallback pattern; only returns an empty result set as success once every engine has been tried (D2B-063)
+
+0.52 2026-09-17
+ - internal cleanup: remove an unused $input_fh local from Browser::CLI::main that was computed but never referenced; no observable behavior change (D2B-077)
+
+0.51 2026-09-17
+ - internal refactor: consolidate the four near-identical "flag has no effect on $method" guards in Browser::CLI::execute (--data/--wait-until/--timeout-ms/--file) into one table-driven loop; no observable behavior change (D2B-061)
+
+0.50 2026-09-17
+ - fix browser.search --engines dying with an unhelpful blank "Unknown engine: " error when given a leading, trailing, or doubled comma - empty segments are now silently dropped, consistent with the existing --engines whitespace-trim behavior (D2B-060)
+
+0.49 2026-09-17
+ - fix browser.get/browser.post/browser.png accepting a negative --timeout-ms with no validation, reaching Playwright's native timeout option unchecked - execute() now refuses a negative --timeout-ms with "--timeout-ms must not be negative", matching browser.search's own guard (D2B-058) (D2B-059)
+
+0.48 2026-09-17
+ - fix browser.search accepting a negative --timeout-ms with no validation, reaching Playwright's native timeout option unchecked instead of being refused clearly - execute_search now refuses a negative --timeout-ms with "--timeout-ms must not be negative", matching the existing --max negativity guard (D2B-058)
+
+0.47 2026-09-17
+ - fix browser.png crashing if page->title() throws after the screenshot has already been written to disk successfully - _run_png now wraps the title fetch in eval with an empty-string fallback, matching the defensive pattern _run_get already uses (D2B-012); the already-written screenshot file is now returned instead of the whole call dying (D2B-057)
+
+0.46 2026-09-17
+ - internal refactor: extract _interact_and_run_script from Browser::Runner, consolidating the identical interactive-wait/jquery-injection/script-run sequence that was previously duplicated between _run_get and _run_post; no observable behavior change (D2B-056)
+
+0.45 2026-09-17
+ - fix browser.get/browser.post silently accepting and ignoring --file (only browser.png reads it) - Browser::CLI::execute now refuses --file on GET/POST with a clear "--file is only read by browser.png - it has no effect on $method" error, matching the existing guard pattern for --data/--wait-until/--timeout-ms (D2B-055)
+
+0.44 2026-09-17
+ - fix browser.search decoding a numeric HTML entity naming a UTF-16 surrogate codepoint (e.g. &#xD800;, &#56320;) into an invalid standalone character; _codepoint_to_char now also rejects the 0xD800-0xDFFF surrogate range (in addition to the existing >0x10FFFF check), leaving such an entity as literal text instead of producing invalid UTF-8 in the JSON output (D2B-054)
+
+0.43 2026-09-17
+ - remove duplicated open/decode logic from _installed_node_module_version, which reimplemented the same read/parse/error-handling _read_package_json already provides (with mtime-keyed caching) for a different file (an installed module's own package.json) - it now calls the shared helper directly, so a long-lived process no longer re-reads and re-parses every installed dependency's manifest uncached on every stale-check pass (D2B-053)
+
 0.42 2026-09-17
  - fix browser.search result titles/snippets containing raw HTML entities (e.g. "&amp;amp;", "&amp;#39;") instead of the decoded characters they represent; _strip_tags now decodes common named entities (&amp;, &lt;, &gt;, &quot;, &apos;) and numeric decimal/hex entities after stripping tags (D2B-050)
 

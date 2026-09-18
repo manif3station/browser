@@ -140,7 +140,7 @@ sub _node_runtime_is_current {
     my $fingerprint = $args{fingerprint} || _package_json_fingerprint($package_json);
     my $node_modules = File::Spec->catdir( $home_root, 'node_modules' );
 
-    for my $module ( _required_node_modules() ) {
+    for my $module ( _required_node_modules($package_json) ) {
         return 0 if !-d File::Spec->catdir( $node_modules, $module );
     }
 
@@ -154,7 +154,9 @@ sub _node_runtime_is_current {
 }
 
 sub _required_node_modules {
-    return qw(express jquery playwright uuid);
+    my ($package_json) = @_;
+    my %specs = _package_json_dependency_map($package_json);
+    return sort keys %specs;
 }
 
 sub _install_node_runtime {
@@ -251,13 +253,7 @@ sub _installed_node_module_version {
     my $module = $args{module} || die 'module is required';
     my $package_json = File::Spec->catfile( $home_root, 'node_modules', $module, 'package.json' );
     return if !-f $package_json;
-    open my $fh, '<', $package_json or die "Unable to read $package_json: $!";
-    local $/;
-    my $content = <$fh>;
-    close $fh;
-    my $decoded = eval { JSON::PP::decode_json($content) };
-    die "Unable to parse $package_json: $@" if !$decoded || $@;
-    return $decoded->{version};
+    return _read_package_json($package_json)->{decoded}{version};
 }
 
 sub _version_satisfies_spec {
@@ -270,6 +266,7 @@ sub _version_satisfies_spec {
     }
 
     my $minimum = substr $spec, 1;
+    return 0 if $installed =~ /-/ && $installed !~ /\A\Q$minimum\E\z/;
     my @installed = _version_parts($installed);
     my @minimum   = _version_parts($minimum);
     return 0 if !@installed || !@minimum;

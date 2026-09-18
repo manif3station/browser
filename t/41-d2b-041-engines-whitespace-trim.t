@@ -39,4 +39,23 @@ $result = Browser::CLI::execute_search(
 );
 like( $runner->{calls}[0], qr/duckduckgo\.com/, 'leading/trailing whitespace around every engine name in the list is trimmed' );
 
+# D2B-086: the trim above only strips ASCII whitespace (Perl's \s by
+# default). A trailing non-breaking space - plausible from copy-pasted
+# text - survives the trim and causes a real engine name to be
+# rejected as unknown. Codex review round 1 found the initial fix used
+# the DECODED U+00A0 character ("\x{A0}"), but @ARGV arrives as raw,
+# undecoded bytes (this codebase never decodes argv as UTF-8) - a
+# non-breaking space typed/pasted as UTF-8 is the two-byte sequence
+# \xC2\xA0, not the single decoded character, so this test uses the
+# literal byte sequence to match the real CLI input path.
+$runner = FakeSearchRunner->new();
+$result = eval {
+    Browser::CLI::execute_search(
+        argv   => [ 'query', '--engines', "bing\xC2\xA0" ],
+        runner => $runner,
+    );
+};
+ok( !$@, 'execute_search accepts an engine name padded with a raw-UTF-8-byte non-breaking space instead of dying with "Unknown engine"' ) or diag("Got error: $@");
+is( $result->{engine_used}, 'bing', 'a non-breaking-space-padded engine name (as raw UTF-8 bytes, matching how @ARGV actually arrives) is trimmed and resolved correctly' ) if $result;
+
 done_testing();

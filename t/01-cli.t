@@ -106,17 +106,23 @@ my $png_result = Browser::CLI::execute(
 is( $png_result->{method}, 'PNG', 'execute forwards the PNG request method' );
 is( $png_result->{file}, '/tmp/shot', 'execute forwards the screenshot file option' );
 
-my $stdout = q{};
-open my $stdout_fh, '>', \$stdout or die "Unable to open stdout scalar: $!";
-my $stderr = q{};
-open my $stderr_fh, '>', \$stderr or die "Unable to open stderr scalar: $!";
+# D2B-072: shared helper for the repeated stdout/stderr scalar-filehandle
+# capture boilerplate around Browser::CLI::main, removing ~30 duplicated
+# lines across the test cases below. Returns (exit, stdout, stderr).
+sub _capture_main {
+    my (%args) = @_;
+    my $stdout = q{};
+    my $stderr = q{};
+    open my $stdout_fh, '>', \$stdout or die "Unable to open stdout scalar: $!";
+    open my $stderr_fh, '>', \$stderr or die "Unable to open stderr scalar: $!";
+    my $exit = Browser::CLI::main( %args, output_fh => $stdout_fh, error_fh => $stderr_fh );
+    return ( $exit, $stdout, $stderr );
+}
 
-my $exit = Browser::CLI::main(
-    method    => 'POST',
-    argv      => [ 'https://example.test/form', '--data', 'name=dashboard' ],
-    runner    => TestRunner->new(),
-    output_fh => $stdout_fh,
-    error_fh  => $stderr_fh,
+my ( $exit, $stdout, $stderr ) = _capture_main(
+    method => 'POST',
+    argv   => [ 'https://example.test/form', '--data', 'name=dashboard' ],
+    runner => TestRunner->new(),
 );
 
 is( $exit, 0, 'main exits zero on success' );
@@ -125,95 +131,59 @@ my $payload = decode_json($stdout);
 is( $payload->{method}, 'POST', 'main prints JSON output' );
 is( $payload->{data}, 'name=dashboard', 'main prints the runner result' );
 
-$stdout = q{};
-$stderr = q{};
 my $stdin = "\n";
 open my $stdin_fh, '<', \$stdin or die "Unable to open stdin scalar: $!";
-open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar: $!";
-open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar: $!";
-$exit = Browser::CLI::main(
-    method    => 'GET',
-    argv      => [ 'https://example.test', '--ask' ],
-    runner    => TestRunner->new(),
-    input_fh  => $stdin_fh,
-    output_fh => $stdout_fh,
-    error_fh  => $stderr_fh,
+( $exit, $stdout, $stderr ) = _capture_main(
+    method   => 'GET',
+    argv     => [ 'https://example.test', '--ask' ],
+    runner   => TestRunner->new(),
+    input_fh => $stdin_fh,
 );
 
 is( $exit, 0, 'main accepts ask-mode arguments' );
 $payload = decode_json($stdout);
 is( $payload->{interactive}, 1, 'main prints interactive mode in the runner result' );
 
-$stdout = q{};
-$stderr = q{};
-open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for jquery mode: $!";
-open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for jquery mode: $!";
-$exit = Browser::CLI::main(
-    method    => 'GET',
-    argv      => [ 'https://example.test', '--jquery' ],
-    runner    => TestRunner->new(),
-    output_fh => $stdout_fh,
-    error_fh  => $stderr_fh,
+( $exit, $stdout, $stderr ) = _capture_main(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--jquery' ],
+    runner => TestRunner->new(),
 );
 is( $exit, 0, 'main accepts jquery mode arguments' );
 $payload = decode_json($stdout);
 is( $payload->{jquery}, 1, 'main prints jquery mode in the runner result' );
 
-$stdout = q{};
-$stderr = q{};
-open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for controller mode: $!";
-open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for controller mode: $!";
-$exit = Browser::CLI::main(
-    method    => 'GET',
-    argv      => [ 'https://example.test', '--flow', '--script', 'return { ok => 1 }' ],
-    runner    => TestRunner->new(),
-    output_fh => $stdout_fh,
-    error_fh  => $stderr_fh,
+( $exit, $stdout, $stderr ) = _capture_main(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--flow', '--script', 'return { ok => 1 }' ],
+    runner => TestRunner->new(),
 );
 is( $exit, 0, 'main accepts controller mode arguments' );
 $payload = decode_json($stdout);
 is( $payload->{controller}, 1, 'main prints controller mode in the runner result' );
 
-$stdout = q{};
-$stderr = q{};
-open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for wait-until mode: $!";
-open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for wait-until mode: $!";
-$exit = Browser::CLI::main(
-    method    => 'GET',
-    argv      => [ 'https://example.test', '--wait-until', 'domcontentloaded' ],
-    runner    => TestRunner->new(),
-    output_fh => $stdout_fh,
-    error_fh  => $stderr_fh,
+( $exit, $stdout, $stderr ) = _capture_main(
+    method => 'GET',
+    argv   => [ 'https://example.test', '--wait-until', 'domcontentloaded' ],
+    runner => TestRunner->new(),
 );
 is( $exit, 0, 'main accepts wait-until arguments' );
 $payload = decode_json($stdout);
 is( $payload->{wait_until}, 'domcontentloaded', 'main prints wait-until in the runner result' );
 
-$stdout = q{};
-$stderr = q{};
-open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for png mode: $!";
-open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for png mode: $!";
-$exit = Browser::CLI::main(
-    method    => 'PNG',
-    argv      => [ 'https://example.test', '--file', '/tmp/browser-shot' ],
-    runner    => TestRunner->new(),
-    output_fh => $stdout_fh,
-    error_fh  => $stderr_fh,
+( $exit, $stdout, $stderr ) = _capture_main(
+    method => 'PNG',
+    argv   => [ 'https://example.test', '--file', '/tmp/browser-shot' ],
+    runner => TestRunner->new(),
 );
 is( $exit, 0, 'main accepts png mode arguments' );
 is( $stdout, "/tmp/browser-shot\n", 'main prints only the screenshot path for png mode' );
 is( $stderr, q{}, 'main keeps stderr empty for png mode success' );
 
-$stdout = q{};
-$stderr = q{};
-open $stdout_fh, '>', \$stdout or die "Unable to reopen stdout scalar for invalid input: $!";
-open $stderr_fh, '>', \$stderr or die "Unable to reopen stderr scalar for invalid input: $!";
-$exit = Browser::CLI::main(
-    method    => 'GET',
-    argv      => [],
-    runner    => TestRunner->new(),
-    output_fh => $stdout_fh,
-    error_fh  => $stderr_fh,
+( $exit, $stdout, $stderr ) = _capture_main(
+    method => 'GET',
+    argv   => [],
+    runner => TestRunner->new(),
 );
 
 is( $exit, 2, 'main exits non-zero on invalid input' );

@@ -18,7 +18,7 @@ is( Browser::Runner::NodeRuntime::_path_list_separator(), $Config::Config{path_s
 
 {
     my $temp_root = tempdir( CLEANUP => 1 );
-    for my $module ( Browser::Runner::NodeRuntime::_required_node_modules() ) {
+    for my $module ( qw(express jquery playwright uuid) ) {
         make_path( File::Spec->catdir( $temp_root, 'node_modules', $module ) );
         open my $fh, '>', File::Spec->catfile( $temp_root, 'node_modules', $module, 'package.json' )
           or die "Unable to write temp installed package.json for $module: $!";

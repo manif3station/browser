@@ -6,11 +6,15 @@ use Test::More;
 use lib 'lib';
 use Browser::Runner;
 
-# D2B-032: _response_document's fragment-detection regex accepted ANY
-# opening tag paired with ANY closing tag, never checking the tag names
-# actually match. A malformed body like '<div>text</span>' was treated
-# as trustworthy HTML and passed through raw instead of being escaped
-# into the safe <pre> fallback.
+# D2B-032 originally fixed _response_document's fragment-detection
+# regex accepting ANY opening tag paired with ANY closing tag, never
+# checking the tag names actually match. D2B-079 later removed the
+# entire tag-shape trust path (a hand-rolled scanner cannot safely
+# replicate HTML5's implicit tag-closing rules, so it was itself a
+# script-injection bypass) - a body with no explicit text/html
+# content-type is now always escaped/wrapped, regardless of whether
+# its tags happen to match. These cases are kept as regression
+# coverage for that end state.
 
 {
     my $mismatched = '<div>text</span>';
@@ -20,18 +24,19 @@ use Browser::Runner;
 }
 
 {
+    # D2B-079: a well-formed single-root fragment is no longer trusted
+    # raw either, since text/plain is not an explicit HTML content
+    # type - it is escaped/wrapped, same as the mismatched case above.
     my $well_formed = '<div>text</div>';
     my $document = Browser::Runner::_response_document( body => $well_formed, content_type => 'text/plain' );
-    is( $document, $well_formed, 'a genuinely well-formed single-root fragment still passes through unchanged, as before' );
+    like( $document, qr{<pre[^>]*>}, 'D2B-079: even a well-formed fragment is escaped/wrapped without an explicit HTML content-type' );
+    like( $document, qr{&lt;div&gt;text&lt;/div&gt;}, 'D2B-079: the fragment content itself appears HTML-escaped inside the wrapper' );
 }
 
 {
-    # HTML tag names are case-insensitive; the tightened tag-name check
-    # must not introduce a regression that rejects a legitimately
-    # mixed-case (if unusual) but still self-consistent fragment.
     my $mixed_case = '<DIV>text</div>';
     my $document = Browser::Runner::_response_document( body => $mixed_case, content_type => 'text/plain' );
-    is( $document, $mixed_case, 'a mixed-case but self-consistent tag pair (DIV/div) is still treated as trusted HTML, not a new false-positive rejection' );
+    like( $document, qr{<pre[^>]*>}, 'D2B-079: a mixed-case tag pair is likewise escaped/wrapped without an explicit HTML content-type' );
 }
 
 done_testing();

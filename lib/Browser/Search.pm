@@ -8,9 +8,9 @@ use URI::Escape qw(uri_escape_utf8);
 
 sub _default_engines {
     return (
-        { name => 'bing',       url => sub { 'https://www.bing.com/search?q=' . uri_escape_utf8( $_[0] ) } },
-        { name => 'google',     url => sub { 'https://www.google.com/search?q=' . uri_escape_utf8( $_[0] ) } },
-        { name => 'duckduckgo', url => sub { 'https://html.duckduckgo.com/html/?q=' . uri_escape_utf8( $_[0] ) } },
+        { name => 'bing',       url => sub { 'https://www.bing.com/search?q=' . uri_escape_utf8( $_[0] ) },       parser => \&_parse_bing },
+        { name => 'google',     url => sub { 'https://www.google.com/search?q=' . uri_escape_utf8( $_[0] ) },     parser => \&_parse_google },
+        { name => 'duckduckgo', url => sub { 'https://html.duckduckgo.com/html/?q=' . uri_escape_utf8( $_[0] ) }, parser => \&_parse_duckduckgo },
     );
 }
 
@@ -29,11 +29,14 @@ sub search {
     # Bounded so several default engines tried sequentially can't stack
     # multiple Playwright ~30s waits into a much longer effective hang.
     my $timeout_ms = defined $args{timeout_ms} ? $args{timeout_ms} : 10_000;
+    die "--timeout-ms must not be negative" if $timeout_ms < 0;
 
     my @tried;
     my @failures;
     my $any_captcha = 0;
+    my $engine_index = -1;
     for my $engine (@engines) {
+        $engine_index++;
         my $url = $engine->{url}->($query);
         my $result = eval { $runner->request( method => 'GET', url => $url, headless => 1, timeout_ms => $timeout_ms ) };
         my $error = $@;
@@ -51,7 +54,13 @@ sub search {
             next;
         }
 
-        my $results = _parse_results( engine => $engine->{name}, body => $result->{body} );
+        my $results = _parse_results( engine => $engine, body => $result->{body} );
+
+        if ( !@$results && length( $result->{body} // q{} ) > 200 && $engine_index < $#engines ) {
+            push @failures, "$engine->{name} (no results parsed - engine markup may have changed)";
+            next;
+        }
+
         $results = [ @{$results}[ 0 .. $max - 1 ] ] if $max < @$results;
 
         return {
@@ -69,12 +78,15 @@ sub search {
 
 sub _parse_results {
     my (%args) = @_;
-    my $engine = $args{engine} || q{};
+    my $engine = $args{engine};
     my $body   = defined $args{body} ? $args{body} : q{};
 
-    return _parse_bing($body)       if $engine eq 'bing';
-    return _parse_google($body)     if $engine eq 'google';
-    return _parse_duckduckgo($body) if $engine eq 'duckduckgo';
+    return $engine->{parser}->($body) if ref $engine eq 'HASH' && ref $engine->{parser} eq 'CODE';
+
+    my $name = ref $engine eq 'HASH' ? ( $engine->{name} || q{} ) : ( $engine || q{} );
+    return _parse_bing($body)       if $name eq 'bing';
+    return _parse_google($body)     if $name eq 'google';
+    return _parse_duckduckgo($body) if $name eq 'duckduckgo';
     return [];
 }
 
@@ -82,7 +94,7 @@ sub _parse_bing {
     my ($body) = @_;
     my @results;
     while ( $body =~ m{<li\s+class="b_algo">.*?<h2><a\s+href="([^"]+)">(.*?)</a></h2>.*?<div\s+class="b_caption"><p>(.*?)</p>}gs ) {
-        push @results, { url => $1, title => _strip_tags($2), snippet => _strip_tags($3) };
+        push @results, { url => _decode_entities($1), title => _strip_tags($2), snippet => _strip_tags($3) };
     }
     return _rank(@results);
 }
@@ -91,7 +103,7 @@ sub _parse_google {
     my ($body) = @_;
     my @results;
     while ( $body =~ m{<div\s+class="g">\s*<a\s+href="([^"]+)"><h3>(.*?)</h3></a>\s*<span\s+class="VwiC3b">(.*?)</span>}gs ) {
-        push @results, { url => $1, title => _strip_tags($2), snippet => _strip_tags($3) };
+        push @results, { url => _decode_entities($1), title => _strip_tags($2), snippet => _strip_tags($3) };
     }
     return _rank(@results);
 }
@@ -100,7 +112,7 @@ sub _parse_duckduckgo {
     my ($body) = @_;
     my @results;
     while ( $body =~ m{<a\s+class="result__a"\s+href="([^"]+)">(.*?)</a>\s*<a\s+class="result__snippet">(.*?)</a>}gs ) {
-        push @results, { url => $1, title => _strip_tags($2), snippet => _strip_tags($3) };
+        push @results, { url => _decode_entities($1), title => _strip_tags($2), snippet => _strip_tags($3) };
     }
     return _rank(@results);
 }
@@ -149,6 +161,7 @@ sub _decode_entities {
 sub _codepoint_to_char {
     my ($codepoint) = @_;
     return undef if $codepoint > 0x10FFFF;
+    return undef if $codepoint >= 0xD800 && $codepoint <= 0xDFFF;
     return chr($codepoint);
 }
 

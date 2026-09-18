@@ -13,7 +13,6 @@ sub main {
     my (%args) = @_;
     my $output_fh = $args{output_fh} || \*STDOUT;
     my $error_fh  = $args{error_fh}  || \*STDERR;
-    my $input_fh  = $args{input_fh}  || \*STDIN;
 
     my $result = eval { execute(%args) };
     if ( my $error = $@ ) {
@@ -47,35 +46,47 @@ sub execute {
         browser    => 'chrome',
         'headless' => 1,
     );
-    GetOptionsFromArray(
-        \@argv,
-        'script=s'     => \$options{script},
-        'jquery!'      => \$options{jquery},
-        'playwright!'  => \$options{playwright},
-        'agent!'       => \$options{agent},
-        'flow!'        => \$options{flow},
-        'data=s'       => \$options{data},
-        'browser=s'    => \$options{browser},
-        'headless!'    => \$options{headless},
-        'ask!'         => \$options{ask},
-        'askme!'       => \$options{askme},
-        'wait-until=s' => \$options{wait_until},
-        'timeout-ms=i' => \$options{timeout_ms},
-        'file=s'       => \$options{file},
-    ) or die "Invalid options";
+    my @getopt_warnings;
+    my $getopt_ok = do {
+        local $SIG{__WARN__} = sub { push @getopt_warnings, $_[0] };
+        GetOptionsFromArray(
+            \@argv,
+            'script=s'     => \$options{script},
+            'jquery!'      => \$options{jquery},
+            'playwright!'  => \$options{playwright},
+            'agent!'       => \$options{agent},
+            'flow!'        => \$options{flow},
+            'data=s'       => \$options{data},
+            'browser=s'    => \$options{browser},
+            'headless!'    => \$options{headless},
+            'ask!'         => \$options{ask},
+            'askme!'       => \$options{askme},
+            'wait-until=s' => \$options{wait_until},
+            'timeout-ms=i' => \$options{timeout_ms},
+            'file=s'       => \$options{file},
+        );
+    };
+    die "Invalid options: " . _sanitize_error( join q{}, @getopt_warnings ) if !$getopt_ok;
 
     my $url = shift @argv;
     die "Missing URL" if !defined $url || $url eq q{};
     die "Unexpected arguments: @argv" if @argv;
 
-    die "--data is only read by browser.post - it has no effect on $method"
-      if defined $options{data} && $method ne 'POST';
+    die "--timeout-ms must not be negative"
+      if defined $options{timeout_ms} && $options{timeout_ms} < 0;
 
-    die "--wait-until is only read by browser.get/browser.png - it has no effect on $method"
-      if defined $options{wait_until} && $method eq 'POST';
-
-    die "--timeout-ms is only read by browser.get/browser.png - it has no effect on $method"
-      if defined $options{timeout_ms} && $method eq 'POST';
+    my @flag_guards = (
+        [ data       => 'browser.post',           sub { $_[0] ne 'POST' } ],
+        [ wait_until => 'browser.get/browser.png', sub { $_[0] eq 'POST' } ],
+        [ timeout_ms => 'browser.get/browser.png', sub { $_[0] eq 'POST' } ],
+        [ file       => 'browser.png',             sub { $_[0] ne 'PNG' } ],
+    );
+    for my $guard (@flag_guards) {
+        my ( $key, $reader, $blocked ) = @$guard;
+        my $flag = $key eq 'wait_until' ? 'wait-until' : $key eq 'timeout_ms' ? 'timeout-ms' : $key;
+        die "--$flag is only read by $reader - it has no effect on $method"
+          if defined $options{$key} && $blocked->($method);
+    }
 
     my $interactive = $options{ask} || $options{askme} ? 1 : 0;
     my $controller = $options{playwright} || $options{agent} || $options{flow} ? 1 : 0;
@@ -120,13 +131,18 @@ sub execute_search {
     my @argv = @{ $args{argv} || [] };
 
     my %options = ( max => 10 );
-    GetOptionsFromArray(
-        \@argv,
-        'engine=s'     => \$options{engine},
-        'engines=s'    => \$options{engines},
-        'max=i'        => \$options{max},
-        'timeout-ms=i' => \$options{timeout_ms},
-    ) or die "Invalid options";
+    my @getopt_warnings;
+    my $getopt_ok = do {
+        local $SIG{__WARN__} = sub { push @getopt_warnings, $_[0] };
+        GetOptionsFromArray(
+            \@argv,
+            'engine=s'     => \$options{engine},
+            'engines=s'    => \$options{engines},
+            'max=i'        => \$options{max},
+            'timeout-ms=i' => \$options{timeout_ms},
+        );
+    };
+    die "Invalid options: " . _sanitize_error( join q{}, @getopt_warnings ) if !$getopt_ok;
 
     my $query = shift @argv;
     die "Missing query" if !defined $query || $query =~ /\A\s*\z/;
@@ -134,12 +150,24 @@ sub execute_search {
 
     die "--max must not be negative" if $options{max} < 0;
 
+    die "--timeout-ms must not be negative"
+      if defined $options{timeout_ms} && $options{timeout_ms} < 0;
+
     die "--engine and --engines cannot both be given"
       if defined $options{engine} && defined $options{engines};
 
     my @requested_names;
     push @requested_names, $options{engine} if defined $options{engine};
-    push @requested_names, map { s/\A\s+|\s+\z//g; $_ } split /,/, $options{engines} if defined $options{engines};
+    # D2B-086: Perl's \s only matches ASCII whitespace, so a
+    # copy-pasted engine name padded with a non-breaking space
+    # survived this trim and was rejected as unknown. @ARGV arrives as
+    # raw, undecoded bytes (this codebase never decodes argv as
+    # UTF-8), so a non-breaking space typed/pasted as UTF-8 is the
+    # two-byte sequence \xC2\xA0, not the single decoded U+00A0
+    # character - the regex must match that literal byte sequence,
+    # not \x{A0}, or it only strips the trailing byte and leaves a
+    # mangled \xC2 behind.
+    push @requested_names, grep { $_ ne q{} } map { s/\A(?:\s|\xC2\xA0)+|(?:\s|\xC2\xA0)+\z//g; $_ } split /,/, $options{engines} if defined $options{engines};
 
     die "--engines named no engines at all" if defined $options{engines} && !@requested_names;
 
