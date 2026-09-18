@@ -101,7 +101,10 @@ dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 dashboard browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 dashboard browser.post https://example.com/form --data 'name=dashboard'
 dashboard browser.get https://example.com --no-headless
+dashboard browser.get --help
 ```
+
+`--help` prints usage text and exits 0 for any of `browser.get`/`browser.post`/`browser.png`/`browser.search`, taking priority over every other flag or validation - it works even with no URL/query given, and even combined with other flags. `browser.skills` prints this skill's `SKILLS.md` agent manual.
 
 `--data` is refused on `browser.get`/`browser.png` - only `browser.post` reads it. Likewise, `--wait-until`/`--timeout-ms` are refused on `browser.post` - `browser.get`/`browser.png` read them, and `browser.search` also reads `--timeout-ms` (bounding each engine attempt, default 10 seconds). `--file` is refused on `browser.get`/`browser.post` - only `browser.png` reads it.
 
@@ -457,6 +460,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 27. `browser.post`'s `final_url` result field reports the actual HTTP response URL instead of the page's untouched `about:blank` default when nothing navigates the page after the POST (the common case for a plain, non-controller POST). If a controller script, the response body's own embedded script, or manual `--ask` interaction deliberately navigates the page back to literally `about:blank`, that is indistinguishable from never having navigated at all, and `final_url` still reports the response URL in that rare case rather than the literal string `about:blank` - `about:blank` was never a useful answer to report either way.
 28. `browser.get`/`browser.post`/`browser.png` default to a headless browser; `--headless`/`--no-headless` sets it explicitly - useful for watching a non-interactive run without pausing for manual input. `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect when neither is used.
 29. If the system's `node` binary is older than v20 (`package.json` declares `"engines": { "node": ">=20" }`, matching Playwright's own declared minimum), the skill fails fast with a clear "Node.js v20+ is required ... found vN. Please upgrade Node.js." error before attempting to load Playwright, instead of letting the real cause surface later as a cryptic native error from deep inside Playwright's own module-loading chain.
+30. `--help` is recognized on `browser.get`/`browser.post`/`browser.png`/`browser.search` and always short-circuits to printing usage text and exiting 0, taking priority over every other flag or missing-argument validation - passing `--help` alongside other flags, or with no URL/query at all, still just prints usage rather than attempting a request or reporting an unrelated error.
 
 ## Documentation
 

@@ -1,5 +1,14 @@
 Revision history for browser
 
+0.83 2026-09-18
+ - fix tickets/TESTING.md's documented Docker/host test commands - all 3 occurrences said 'cd .../browser' instead of 'cd .../browser/CODE' (the actual code lives one level deeper), so the documented commands failed before any testing happened. Found by Codex review while verifying an unrelated ticket (D2B-098)
+
+0.82 2026-09-18
+ - add browser.skills, printing a new SKILLS.md agent manual (condensed from README.md/docs/usage.md for an agent audience: commands, flags, result payload shape, prerequisites, disclosed limitations, layout), following the same cli/skills pattern tira already uses. 5 Codex review rounds - round 4 caught a critical issue: SKILLS.md was excluded by a global ~/.gitignore rule and would never have been committed; fixed with a repo-local .gitignore negation rule, leaving the global gitignore untouched (owner directive, D2B-097)
+
+0.81 2026-09-18
+ - add --help to browser.get/post/png/search - none of the four commands declared a --help option, so Getopt::Long reported it as "Invalid options: Unknown option: help" instead of printing usage and exiting cleanly. --help now short-circuits to printing usage text and exiting 0, before any other validation runs, even when combined with other flags or given with no URL/query at all (owner directive, D2B-096)
+
 0.80 2026-09-18
  - add a minimum Node.js version check - nothing checked the system's actual node binary version before this, so an outdated Node (below v20, Playwright's own declared minimum per its installed package.json's "engines" field) only surfaced as whatever cryptic native error Playwright/require produced deep in its own module-loading chain. _ensure_node_runtime now checks the node binary's version first and dies with a clear "Node.js v20+ is required ... found vN. Please upgrade Node.js." message; package.json now also declares "engines": { "node": ">=20" } (D2B-095)
 

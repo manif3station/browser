@@ -1,3 +1,8 @@
 /cover_db
 /perl5
 /local
+
+# D2B-097: this project's own SKILLS.md (the browser.skills agent manual)
+# is a real, tracked deliverable - override the global ~/.gitignore rule
+# that excludes a generically-named SKILLS.md elsewhere on this machine.
+!/SKILLS.md

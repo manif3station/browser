@@ -20,6 +20,11 @@ sub main {
         return 2;
     }
 
+    if ( ref $result eq 'HASH' && $result->{help} ) {
+        print {$output_fh} $result->{usage};
+        return 0;
+    }
+
     if ( uc( $args{method} || q{} ) eq 'PNG' ) {
         print {$output_fh} $result->{file}, "\n";
         return 0;
@@ -29,6 +34,44 @@ sub main {
     return 0;
 }
 
+# D2B-096: --help was never a declared option on any of the four
+# browser.* commands, so Getopt::Long reported it as an unknown option
+# instead of printing usage and exiting cleanly, as is conventional.
+sub _usage_get_post_png {
+    my ($method) = @_;
+    my $verb = $method eq 'GET' ? 'browser.get' : $method eq 'POST' ? 'browser.post' : 'browser.png';
+    return <<USAGE;
+Usage: $verb URL [OPTIONS]
+
+  --script TEXT          Run TEXT as a page-context script (a JS page.evaluate() call,
+                          or a Perl controller script with --playwright/--agent/--flow)
+  --jquery                Inject jQuery before running --script
+  --playwright            Run --script as a Perl controller script with \$page/\$browser
+  --agent                 Alias for --playwright
+  --flow                  Alias for --playwright
+  --data TEXT             POST body (browser.post only)
+  --browser NAME          chrome (default), chromium, firefox, or webkit
+  --headless / --no-headless   Run headless (default) or with a visible browser window
+  --ask / --askme         Open a visible browser and wait for manual confirmation before continuing
+  --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png only)
+  --timeout-ms N          Navigation timeout in milliseconds (browser.get/browser.png only)
+  --file PATH             Screenshot destination path (browser.png only)
+  --help                  Print this usage text and exit
+USAGE
+}
+
+sub _usage_search {
+    return <<'USAGE';
+Usage: browser.search QUERY [OPTIONS]
+
+  --engine NAME           Use only this engine (bing, google, or duckduckgo)
+  --engines LIST          Try these engines in order, comma-separated (cannot combine with --engine)
+  --max N                 Maximum results to return (default 10)
+  --timeout-ms N          Per-engine request timeout in milliseconds
+  --help                  Print this usage text and exit
+USAGE
+}
+
 sub _sanitize_error {
     my ($error) = @_;
     chomp $error;
@@ -36,11 +79,25 @@ sub _sanitize_error {
     return $error;
 }
 
+# D2B-096 (Codex review round 1): --help must take priority over EVERY
+# other validation, including a malformed/unknown OTHER option (e.g.
+# --help --not-a-real-flag, or --help --data with no value) - but
+# Getopt::Long parses the whole argv list and dies on those before a
+# post-parse 'help!' check ever runs. A literal --help anywhere in argv
+# is checked here, before GetOptionsFromArray is even called, so a
+# broken sibling flag can never suppress --help's own short-circuit.
+sub _argv_requests_help {
+    my ($argv) = @_;
+    return !!grep { $_ eq '--help' } @$argv;
+}
+
 sub execute {
     my (%args) = @_;
     my @argv = @{ $args{argv} || [] };
     my $method = uc( $args{method} || q{} );
     die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG';
+
+    return { help => 1, usage => _usage_get_post_png($method) } if _argv_requests_help( \@argv );
 
     my %options = (
         browser    => 'chrome',
@@ -122,6 +179,11 @@ sub main_search {
         return 2;
     }
 
+    if ( ref $result eq 'HASH' && $result->{help} ) {
+        print {$output_fh} $result->{usage};
+        return 0;
+    }
+
     print {$output_fh} encode_json($result), "\n";
     return 0;
 }
@@ -129,6 +191,8 @@ sub main_search {
 sub execute_search {
     my (%args) = @_;
     my @argv = @{ $args{argv} || [] };
+
+    return { help => 1, usage => _usage_search() } if _argv_requests_help( \@argv );
 
     my %options = ( max => 10 );
     my @getopt_warnings;

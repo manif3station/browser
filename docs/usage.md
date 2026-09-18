@@ -21,7 +21,10 @@ dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
 dashboard browser.search 'query' --engine google
 dashboard browser.search 'query' --engines duckduckgo,bing --max 5
 dashboard browser.get https://example.com --no-headless
+dashboard browser.get --help
 ```
+
+`--help` prints usage text and exits 0 for any of the four commands, taking priority over every other flag or missing-argument validation - it works even with no URL/query given, and even combined with other flags. `browser.skills` prints this skill's `SKILLS.md` agent manual.
 
 `browser.get`/`browser.post`/`browser.png` all run headless by default; `--headless`/`--no-headless` sets it explicitly, useful for watching a non-interactive run without pausing for manual input. `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect on a non-interactive run.
 

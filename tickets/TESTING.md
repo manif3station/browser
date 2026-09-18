@@ -7,7 +7,7 @@ Functional pass:
 ```bash
 docker compose -f ~/projects/skills/docker-compose.testing.yml run --rm perl-test bash -lc '
 set -euo pipefail
-cd /workspace/skills/browser
+cd /workspace/skills/browser/CODE
 cpanm --notest -L /root/perl5 --cpanfile cpanfile --installdeps .
 npm install --prefix "$HOME" .
 export PERL5LIB=/root/perl5/lib/perl5${PERL5LIB:+:$PERL5LIB}
@@ -21,7 +21,7 @@ Covered pass:
 ```bash
 docker compose -f ~/projects/skills/docker-compose.testing.yml run --rm perl-test bash -lc '
 set -euo pipefail
-cd /workspace/skills/browser
+cd /workspace/skills/browser/CODE
 cpanm --notest -L /root/perl5 --cpanfile cpanfile --installdeps .
 npm install --prefix "$HOME" .
 export PERL5LIB=/root/perl5/lib/perl5${PERL5LIB:+:$PERL5LIB}
@@ -57,7 +57,7 @@ Latest covered result for `DD-033`:
 Run from the skill repository:
 
 ```bash
-cd ~/projects/skills/skills/browser
+cd ~/projects/skills/skills/browser/CODE
 perl cli/png https://example.com --file /tmp/browser-proof
 ```
 
@@ -82,7 +82,7 @@ tmp_home=$(mktemp -d)
 export HOME="$tmp_home"
 perl -I~/projects/developer-dashboard/lib ~/projects/developer-dashboard/bin/dashboard init
 mkdir -p "$HOME/.developer-dashboard/skills"
-cp -R ~/projects/skills/skills/browser "$HOME/.developer-dashboard/skills/browser"
+cp -R ~/projects/skills/skills/browser/CODE "$HOME/.developer-dashboard/skills/browser"
 cpanm --notest -L "$HOME/perl5" --cpanfile ~/projects/developer-dashboard/cpanfile --installdeps ~/projects/developer-dashboard
 cpanm --notest -L "$HOME/perl5" --cpanfile "$HOME/.developer-dashboard/skills/browser/cpanfile" --installdeps "$HOME/.developer-dashboard/skills/browser"
 export PERL5LIB="$HOME/perl5/lib/perl5"
