@@ -1,5 +1,8 @@
 Revision history for browser
 
+0.88 2026-09-19
+ - fix tickets/DD-020.md and tickets/DD-033.md referencing the wrong path 'skills/browser/' instead of 'skills/browser/CODE/' - same path-drift pattern D2B-098 fixed in tickets/TESTING.md; the actual source code lives one level deeper. Lower severity since these are historical, already-closed ticket records rather than live copy-pasteable commands. Found by JOB-005 doc-accuracy hunt (D2B-106)
+
 0.87 2026-09-18
  - fix cli/skills's POD SYNOPSIS, which said 'd2 browser.skills' - the only 'd2'-prefixed invocation anywhere in this repo's docs; every other doc (SKILLS.md, README.md, docs/overview.md, docs/usage.md) consistently says 'dashboard browser.skills'. cli/skills is the only cli/* script with any POD at all, so this wrong prefix sat uncontested since it was introduced in 0.83 (D2B-097). Found by JOB-005 doc-accuracy hunt (D2B-102)
 
