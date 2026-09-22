@@ -160,10 +160,22 @@ sub _node_runtime_is_current {
     my $stamp = _read_node_runtime_stamp( home_root => $home_root );
     return 1 if defined $stamp && $stamp eq $fingerprint;
 
-    return _installed_modules_satisfy_package_json(
+    my $satisfies = _installed_modules_satisfy_package_json(
         home_root    => $home_root,
         package_json => $package_json,
     );
+
+    # D2B-183: was only ever written from _ensure_node_runtime's own
+    # "just ran _install_node_runtime" branch, so the fast stamp-
+    # comparison path above never engaged for the common case where
+    # Developer Dashboard's own top-level npm install populated
+    # node_modules directly - every call paid this slow per-dependency
+    # check forever. Writing it here too, right after a genuine
+    # currency confirmation by any means, lets the next call take the
+    # fast path regardless of which route installed the dependencies.
+    _write_node_runtime_stamp( home_root => $home_root, fingerprint => $fingerprint ) if $satisfies;
+
+    return $satisfies;
 }
 
 sub _required_node_modules {

@@ -28,7 +28,9 @@ version from `.env` and exiting 0 - `--help` wins if both are given.
   `--agent`/`--flow`) a Perl controller script with `$page`/`$browser`/
   `$playwright` in scope. An explicit empty string is refused with
   "--script must not be empty" in both plain and controller mode
-  (D2B-158) - omitting `--script` entirely remains a silent no-op.
+  (D2B-158) - omitting `--script` entirely remains a silent no-op in
+  plain JS mode, but in controller mode is refused the same way with
+  "Controller mode requires --script" (D2B-184).
 - `--jquery` — inject jQuery before running `--script`.
 - `--playwright` / `--agent` / `--flow` — all three are aliases enabling
   Perl controller mode for `--script`.
@@ -44,9 +46,11 @@ version from `.env` and exiting 0 - `--help` wins if both are given.
   `--browser --version`) is misinterpreted the same way, since the whole
   argument list is scanned before any flag value is parsed - only the
   equals-form (`--flag=--help`) is safe for any flag (D2B-140).
-- `--browser NAME` — `chrome` (default), `chromium`, `firefox`, `webkit`.
-  Only `chrome`/`chromium` read `CHROMIUM_BIN`/PATH auto-detection;
-  firefox/webkit always launch Playwright's own bundled binary.
+- `--browser NAME` — `chrome` (default), `chromium`, `firefox`, `webkit`
+  (case-insensitive, e.g. `Chrome`/`WEBKIT` are accepted the same as the
+  matching lowercase form, D2B-185). Only `chrome`/`chromium` read
+  `CHROMIUM_BIN`/PATH auto-detection; firefox/webkit always launch
+  Playwright's own bundled binary.
 - `--headless` / `--no-headless` — default headless=1. `--ask`/`--askme`
   unconditionally force headless off, overriding an explicit `--headless`.
 - `--ask` / `--askme` — visible browser, waits for a real keypress on
@@ -123,7 +127,12 @@ D2B-115), `file`, `script_result` (if `--script` given, D2B-131). Search:
 - A URL/query argument beginning with a literal `-` is misparsed as an
   unknown option on `get`/`post`/`png`/`search` alike - pass it after a
   literal `--` separator (e.g. `dashboard browser.get -- -example.com`) to
-  have it treated as the positional argument instead.
+  have it treated as the positional argument instead. This escape is itself
+  honored even when the escaped value is literally `--help` or `--version`
+  (e.g. `dashboard browser.get -- --version` treats `--version` as the
+  literal URL, not a version request) - the help/version short-circuit
+  respects a preceding `--` the same way `Getopt::Long` itself does
+  (D2B-186).
 - `browser.png`'s `--file` is refused with a clear error naming the path
   when it resolves to an existing directory (e.g. one literally named
   `shot.png`), instead of reaching Playwright's screenshot() call.

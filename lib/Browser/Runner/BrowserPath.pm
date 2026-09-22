@@ -12,9 +12,10 @@ my @SUPPORTED_BROWSER_TYPES = qw(chrome chromium firefox webkit);
 sub _launch_options {
     my (%args) = @_;
     my $requested = defined $args{browser} ? $args{browser} : 'chrome';
+    my $normalized = lc($requested);
     die "Unsupported browser type: $requested (expected one of: @SUPPORTED_BROWSER_TYPES)"
-      if !grep { $_ eq $requested } @SUPPORTED_BROWSER_TYPES;
-    my $type = $requested eq 'chromium' ? 'chrome' : $requested;
+      if !grep { $_ eq $normalized } @SUPPORTED_BROWSER_TYPES;
+    my $type = $normalized eq 'chromium' ? 'chrome' : $normalized;
     my %launch = (
         headless => $args{headless} ? 1 : 0,
         type     => $type,

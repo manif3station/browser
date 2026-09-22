@@ -83,7 +83,7 @@ Usage: $verb URL [OPTIONS]
   --agent                 Alias for --playwright
   --flow                  Alias for --playwright
   --data TEXT             POST body (browser.post only)
-  --browser NAME          chrome (default), chromium, firefox, or webkit
+  --browser NAME          chrome (default), chromium, firefox, or webkit (case-insensitive)
   --headless / --no-headless   Run headless (default) or with a visible browser window
   --ask / --askme         Open a visible browser and wait for manual confirmation before continuing
   --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png only)
@@ -113,7 +113,13 @@ USAGE
 sub sanitize_error {
     my ($error) = @_;
     chomp $error;
-    $error =~ s{\s+at\s+\S+\s+line\s+\d+\.\z}{};
+
+    # D2B-180: was anchored to \z, so only a TRAILING "at FILE line N."
+    # suffix was ever stripped. A message can carry more than one - e.g.
+    # Browser::Search::search()'s aggregated failure text can embed an
+    # earlier inner die's own location suffix ahead of the outer die's
+    # trailing one - so this strips every occurrence, not just the last.
+    $error =~ s{\s+at\s+\S+\s+line\s+\d+\.}{}g;
     return $error;
 }
 
@@ -146,7 +152,7 @@ sub _trim_engine_name {
 # broken sibling flag can never suppress --help's own short-circuit.
 sub _argv_requests_help {
     my ($argv) = @_;
-    return !!grep { $_ eq '--help' } @$argv;
+    return !!grep { $_ eq '--help' } _argv_before_double_dash($argv);
 }
 
 # D2B-124: --version mirrors --help's own top-priority, pre-parse
@@ -155,7 +161,20 @@ sub _argv_requests_help {
 # when both are given, and a broken sibling flag can never suppress it.
 sub _argv_requests_version {
     my ($argv) = @_;
-    return !!grep { $_ eq '--version' } @$argv;
+    return !!grep { $_ eq '--version' } _argv_before_double_dash($argv);
+}
+
+# D2B-186: the raw pre-Getopt scan above must stop at a literal '--'
+# end-of-options separator, mirroring Getopt::Long's own semantics -
+# otherwise SKILLS.md's documented `-- VALUE` escape for a leading-dash
+# positional argument is defeated whenever VALUE is itself the literal
+# string --help/--version.
+sub _argv_before_double_dash {
+    my ($argv) = @_;
+    for my $i ( 0 .. $#$argv ) {
+        return @{$argv}[ 0 .. $i - 1 ] if $argv->[$i] eq '--';
+    }
+    return @$argv;
 }
 
 # .env's VERSION line is the source of truth for the installed skill's

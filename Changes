@@ -1,5 +1,95 @@
 Revision history for browser
 
+0.160 2026-09-22
+ - fixed lib/Browser/CLI.pm's _argv_requests_help/_argv_requests_version:
+   the pre-Getopt raw-argv scan for a literal --help/--version element
+   had no awareness of a preceding literal -- end-of-options separator,
+   so SKILLS.md's own documented escape for a leading-dash positional
+   argument (dashboard browser.get -- -example.com) was silently
+   defeated whenever the escaped value was itself the literal string
+   --help or --version - the command returned help/version output
+   instead of running with the literal positional value, even though
+   the caller correctly followed the documented workaround. Added a
+   new _argv_before_double_dash helper that truncates argv at the
+   first literal -- element before the help/version scan runs,
+   mirroring Getopt::Long's own end-of-options semantics; a genuine
+   unescaped --help/--version is completely unaffected. New test at
+   t/186-d2b-186-double-dash-help-version-escape.t (7 assertions, 3
+   genuinely failed pre-fix). README.md/SKILLS.md/docs/usage.md
+   updated to document the fix. Found via a scheduled fork-hunt.
+
+0.159 2026-09-22
+ - fixed lib/Browser/Runner/BrowserPath.pm's _launch_options: the
+   requested --browser value was matched against
+   qw(chrome chromium firefox webkit) with a case-sensitive eq, so
+   --browser Chrome/Firefox/WebKit died with "Unsupported browser
+   type" even though the intent was unambiguous - inconsistent with
+   browser.search's --engine/--engines, which this same codebase
+   already normalizes to lowercase and documents/tests as
+   case-insensitive (D2B-042). The requested value is now lowercased
+   into a separate variable before the grep comparison (mirroring
+   execute_search's engine-name handling), while the original-case
+   value is still shown in the "Unsupported browser type" error
+   message for a genuinely invalid value. New test at
+   t/185-d2b-185-browser-case-insensitive.t (10 assertions, 4
+   genuinely failed pre-fix). README.md/SKILLS.md/docs/usage.md
+   updated to document the case-insensitive matching. Found via a
+   scheduled fork-hunt.
+
+0.158 2026-09-22
+ - fixed lib/Browser/Runner.pm's _run_script: it checked
+   !defined $args{script} before it ever checked $args{controller},
+   which made _run_controller_script's own "Controller mode requires
+   --script" die unreachable for the omitted-flag case - only the
+   explicit empty-string case (--script '', D2B-158) could ever
+   trigger it. browser.get/post/png --playwright (or --agent/--flow)
+   given with no --script at all silently no-op'd instead of
+   erroring: exit 0, a normal-looking JSON payload, no script_result
+   field, no diagnostic. Controller mode is now checked first, so an
+   omitted --script in controller mode gets the same documented error
+   an empty one already did. Plain (non-controller) mode omitting
+   --script entirely is unchanged (still a silent no-op, which is
+   correct there). New test at
+   t/184-d2b-184-controller-mode-missing-script.t (4 assertions, 1
+   genuinely failed pre-fix); D2B-158's existing regression test
+   confirmed unaffected. Full suite (99 files, 925 tests) passes
+   unchanged. Found via a scheduled fork-hunt.
+
+0.157 2026-09-22
+ - fixed lib/Browser/Runner/NodeRuntime.pm's _node_runtime_is_current:
+   the fast stamp-comparison path was only ever populated from
+   _ensure_node_runtime's own "just ran this skill's internal
+   _install_node_runtime" branch, so every CLI invocation whose
+   dependencies were instead installed via Developer Dashboard's own
+   top-level npm install (the common case) permanently fell through
+   to the slow per-dependency _installed_modules_satisfy_package_json
+   check, on every single call, forever - the stamp mechanism's whole
+   purpose never engaged for the majority installation path. Now
+   writes the stamp right after ANY successful currency confirmation,
+   not only after an install this skill itself performed. New test at
+   t/183-d2b-183-stamp-written-after-slow-path.t (5 assertions, 3
+   genuinely failed pre-fix). Full suite (98 files, 921 tests) passes
+   unchanged. Found via a scheduled fork-hunt.
+
+0.156 2026-09-22
+ - fixed lib/Browser/CLI.pm's sanitize_error: its regex was anchored to
+   \z, so it only ever stripped a TRAILING "at FILE line N." suffix.
+   Browser::Search::search()'s aggregated per-engine failure text can
+   embed an earlier inner die's own location suffix ahead of the outer
+   die's own trailing one (confirmed live in Docker), leaking an
+   internal file path/line into the CLI-facing "All search engines
+   failed: ..." exit-2 error message. Changed the regex to a global
+   /g strip so every occurrence is removed, not only the last one.
+   Fixed at the single existing information-boundary control point
+   (CLI.pm's _run_and_report_errors already funnels every
+   Browser::Search::search() failure through sanitize_error) rather
+   than duplicating sanitization into Search.pm, which cannot use
+   Browser::CLI without a circular dependency. New test at
+   t/180-d2b-180-sanitize-error-embedded-suffix.t (5 assertions,
+   2 genuinely failed pre-fix). Full suite (97 files, 916 tests)
+   passes unchanged. Found via a fork-hunt during this session's own
+   watch-and-respond cadence.
+
 0.155 2026-09-22
  - refactored lib/Browser/Runner/NodeRuntime.pm's 12 near-identical
    required-argument guards (my $x = $args{x} || die "x is

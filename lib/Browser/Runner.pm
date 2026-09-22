@@ -284,8 +284,16 @@ sub _run_png {
 
 sub _run_script {
     my ( $page, %args ) = @_;
-    return if !defined $args{script};
+
+    # D2B-184: checking !defined $args{script} before $args{controller}
+    # made _run_controller_script's own "Controller mode requires
+    # --script" die unreachable for the omitted-flag case - only the
+    # explicit empty-string case (--script '') could ever trigger it
+    # (D2B-158). Controller mode is checked first now, so an omitted
+    # --script in controller mode gets the same documented error an
+    # empty one already did, instead of a silent no-op.
     return _run_controller_script( $page, %args ) if $args{controller};
+    return if !defined $args{script};
     die "--script must not be empty" if $args{script} eq q{};
     return $page->evaluate( $args{script} );
 }
