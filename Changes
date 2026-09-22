@@ -1,5 +1,94 @@
 Revision history for browser
 
+0.166 2026-09-22
+ - (D2B-197, self-raised improvement) deduplicated run_png/run_pdf's
+   shared capture scaffolding in lib/Browser/Runner/Capture.pm: both now
+   call one internal _capture helper that owns goto/path-reservation/
+   directory-guard/make_path/eval-protected-script/cleanup-on-failure/
+   result-assembly, supplying only their own extension and a write
+   callback (screenshot() for PNG; emulateMedia/evaluate/dimension-
+   validation/pdf() for PDF). Pure refactor, no observable behavior
+   change. Codex review round 1 found the initial extraction reintroduced
+   D2B-195's exact duplicate-key hash-flattening bug (a hardcoded
+   method=>'PNG'/'PDF' silently overwrote the caller's real 'method' key
+   before it reached a --controller script's $method argument) - fixed by
+   renaming to result_method and deleting the 3 helper-only keys from
+   %args before it is spread further; round 2 PASS. 2 new regression
+   tests prove a controller script sees the caller's original (even
+   lowercase) method value unmolested. 100% statement+subroutine coverage
+   maintained on Capture.pm. Full suite: 1001/1001.
+ - added browser.pdf (D2B-196): a new command capturing a full-page PDF
+   via Playwright's page->pdf() (Chromium DevTools' printToPDF) - the
+   missing counterpart to browser.png's existing full-page PNG capture,
+   requested directly by the owner. New cli/pdf entrypoint; CLI.pm's
+   execute()/main()/usage text/flag guards all gained a PDF case
+   mirroring the existing PNG one exactly (same --file conventions:
+   appends .pdf when omitted, refuses an existing-directory collision,
+   writes to a random tmp path when --file is omitted entirely; same
+   CLI stdout convention of printing only the saved file path, not a
+   JSON payload). PDF export is Chromium-only in Playwright - Firefox/
+   WebKit have no page->pdf() support at all - so --browser firefox/
+   webkit is refused with a clear error before a browser is ever
+   launched. lib/Browser/Runner.pm's existing _run_png/path-reservation
+   logic was extracted into a new lib/Browser/Runner/Capture.pm module
+   (Runner.pm was pushing past this workspace's 500-line-per-module
+   guideline once the new PDF logic was added there - same extraction
+   pattern as VersionCompare.pm, D2B-155); the new PDF capture logic
+   itself was written directly in Capture.pm alongside the extracted
+   PNG code, not moved from anywhere. Live-verified against a real Chromium
+   launch: a genuine PDF file with a valid %PDF-1.4 header was produced,
+   and the firefox refusal fires correctly before any browser launches.
+   New tests in t/04-runner-unit.t (7 assertions). docs/overview.md and
+   SKILLS.md/README.md/docs/usage.md all updated to document the new
+   command; a stale doc-drift regression (docs/overview.md not naming
+   the new Capture.pm module) and a stale test regex
+   (t/97-...-skills-command.t expecting a literal "PNG:" substring)
+   were both caught by the full suite and fixed in the same pass.
+   Fork-hunt (round 30) found that this initial run_pdf gave Playwright no
+   size options at all, so page->pdf() silently paginated onto US-Letter
+   pages instead of producing the single full-page document the ticket
+   promised - fixed before push by measuring the page's rendered
+   scrollWidth/scrollHeight (under screen media, forced explicitly since
+   pdf() renders under print media by default) and passing it as
+   width/height, plus printBackground so CSS backgrounds are not dropped.
+   Codex review (2 further rounds) found the fix itself needed guarding:
+   unusable measurements (missing/non-numeric/zero/negative, or
+   evaluate() not returning a hashref at all) now die with a clear error
+   before pdf() is ever called, and a measured width/height over 19200px
+   (~200in at 96dpi, Chromium's practical PDF page-size limit) is refused
+   the same way. Live-verified in Docker: a real 5000px-tall page now
+   produces one MediaBox sized to the content instead of paginated
+   612x792 Letter pages. New tests in t/04-runner-unit.t cover the screen-
+   media call and all seven invalid/oversized-dimension cases.
+   Full suite: 998/998.
+
+0.165 2026-09-22
+ - fixed lib/Browser/Runner.pm's request(): each _run_get/_run_post/
+   _run_png call was built as (browser => $browser, playwright =>
+   $playwright, %args), but %args (the original CLI arg hash) already
+   carries its own 'browser' key - the requested browser-TYPE string
+   (e.g. 'chrome'), not the launched Browser object. A duplicate hash
+   key resolves to its LAST occurrence when the callee flattens the
+   list back into a hash, and since %args was spread after the real
+   objects, the type string silently clobbered the real
+   Playwright::Browser object before it ever reached a controller
+   script (--playwright/--agent/--flow). Every controller script's
+   documented $browser parameter was therefore just the literal
+   browser-type string, not a usable object - $browser->newPage()
+   died with "Can't locate object method newPage via package chrome".
+   Fixed by spreading %args before the real objects, so they win the
+   duplicate-key resolution - the same ordering hazard was also found
+   (Codex review) at three sibling call sites passing 'response' the
+   same way (_run_get/_run_post/_run_png's own calls into
+   _interact_and_run_script), fixed identically even though the CLI's
+   own %args never actually sets a 'response' key today - a defensive
+   fix against any future/programmatic caller that does. New assertions in
+   t/04-runner-unit.t (2 assertions, crashed with the exact predicted
+   error pre-fix). Live-verified against a real Chromium launch:
+   $browser is now a genuine Playwright::Browser object and
+   newPage() works. Full suite: 965/965. Found via a scheduled
+   fork-hunt.
+
 0.164 2026-09-22
  - fixed two tests that silently assumed no real browser/Node
    environment could ever exist, both discovered live while fixing an

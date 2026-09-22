@@ -29,7 +29,7 @@ The skill ships:
 - `cli/search` search entrypoint
 - `cli/skills` entrypoint that prints `SKILLS.md`, a condensed agent-facing manual
 - `lib/Browser/CLI.pm` for CLI parsing and output
-- `lib/Browser/Runner.pm` for Playwright execution orchestration, with `lib/Browser/Runner/NodeRuntime.pm` (Node dependency install), `lib/Browser/Runner/BrowserPath.pm` (browser binary discovery/validation), and `lib/Browser/Runner/VersionCompare.pm` (semver-subset comparison) split out as focused modules
+- `lib/Browser/Runner.pm` for Playwright execution orchestration, with `lib/Browser/Runner/NodeRuntime.pm` (Node dependency install), `lib/Browser/Runner/BrowserPath.pm` (browser binary discovery/validation), `lib/Browser/Runner/VersionCompare.pm` (semver-subset comparison), and `lib/Browser/Runner/Capture.pm` (PNG/PDF file-output capture, with run_png/run_pdf both thin callers of one shared internal `_capture` helper) split out as focused modules
 - `lib/Browser/Search.pm` for the multi-engine fallback strategy and per-engine result parsing
 - dependency files for DD skill installation on Debian-family and macOS hosts
 - a `package.json` file for DD-managed Node dependency installation into `$HOME`

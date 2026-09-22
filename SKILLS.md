@@ -11,18 +11,35 @@ Tira board, not markdown files in `tickets/`.
 dashboard browser.get <url> [OPTIONS]
 dashboard browser.post <url> [OPTIONS]
 dashboard browser.png <url> [OPTIONS]
+dashboard browser.pdf <url> [OPTIONS]
 dashboard browser.search <query> [OPTIONS]
 dashboard browser.skills
 ```
 
-`--help` works on all four of `get`/`post`/`png`/`search` - it always
+`--help` works on all five of `get`/`post`/`png`/`pdf`/`search` - it always
 short-circuits to printing usage and exiting 0, before any other
 validation, even combined with other flags or with no URL/query given.
 `--version` works the same way (D2B-124), printing the installed skill's
 version from `.env` and exiting 0 - `--help` wins if both are given.
 `browser.skills` prints this file verbatim.
 
-## Flags (browser.get/post/png)
+`browser.pdf` (D2B-196) captures a full-page PDF via Playwright's
+Chromium DevTools `printToPDF` - Chromium-based browsers only
+(`chrome`/`chromium`/`edge`); `--browser firefox`/`webkit` is refused
+with a clear error before a browser is ever launched, since Playwright's
+PDF export has no Firefox/WebKit support. Like `browser.png`, it prints
+just the destination file path to stdout (not a JSON payload), appends
+`.pdf` when `--file` omits it, and refuses with a clear error when
+`--file` names an existing directory. The page is measured under
+`screen` media (forced explicitly, since `pdf()` otherwise renders under
+`print` media) and sized to exactly that measurement instead of
+Playwright's default paginated US-Letter output; the measurement must
+resolve to a `{width, height}` object with positive numeric values no
+greater than 19200px (~200in at 96dpi) - a missing, non-numeric, zero,
+negative, oversized, or otherwise malformed measurement is refused with
+a clear error before `pdf()` runs.
+
+## Flags (browser.get/post/png/pdf)
 
 - `--script TEXT` — JS `page.evaluate()` call, or (with `--playwright`/
   `--agent`/`--flow`) a Perl controller script with `$page`/`$browser`/
@@ -94,16 +111,17 @@ caveat above for the one way this can still hang.
 GET/POST: `requested_url`, `final_url`, `method`, `status`, `title` (GET
 only), `content_type`, `headers` (full response header map, D2B-114),
 `body`, `body_text`, `is_captcha`, `script_result` (if `--script` given).
-PNG: `requested_url`, `final_url`, `method`,
+PNG/PDF: `requested_url`, `final_url`, `method`,
 `status`, `title`, `content_type`, `headers` (full response header map,
-D2B-115), `file`, `script_result` (if `--script` given, D2B-131). Search:
+D2B-115), `file`, `script_result` (if `--script` given, D2B-131 /
+D2B-196). Search:
 `query`, `engine_used`,
 `engines_tried`, `results` (each with `rank`, `title`, `url`, `snippet`).
 
 ## Prerequisites
 
 - Node.js v20+ is required (matches Playwright's own declared minimum).
-  `browser.get`/`browser.post`/`browser.png`/`browser.search` all check
+  `browser.get`/`browser.post`/`browser.png`/`browser.pdf`/`browser.search` all check
   the system's `node` binary version before loading Playwright, and fail
   fast with "Node.js v20+ is required (Playwright's own declared
   minimum) - found vN. Please upgrade Node.js." if it's older - this is
@@ -135,17 +153,26 @@ D2B-115), `file`, `script_result` (if `--script` given, D2B-131). Search:
   literal URL, not a version request) - the help/version short-circuit
   respects a preceding `--` the same way `Getopt::Long` itself does
   (D2B-186).
-- `browser.png`'s `--file` is refused with a clear error naming the path
-  when it resolves to an existing directory (e.g. one literally named
-  `shot.png`), instead of reaching Playwright's screenshot() call.
+- `browser.png`/`browser.pdf`'s `--file` is refused with a clear error
+  naming the path when it resolves to an existing directory (e.g. one
+  literally named `shot.png`), instead of reaching Playwright's
+  screenshot()/pdf() call.
+- `browser.pdf` only supports Chromium-based browsers - `--browser
+  firefox`/`webkit` is refused with a clear error before a browser is
+  ever launched (Playwright's PDF export has no support for either).
 
 ## Layout
 
-- `cli/get`, `cli/post`, `cli/png`, `cli/search`, `cli/skills` — thin
-  entrypoint scripts.
+- `cli/get`, `cli/post`, `cli/png`, `cli/pdf`, `cli/search`, `cli/skills`
+  — thin entrypoint scripts.
 - `lib/Browser/CLI.pm` — argument parsing and JSON/usage output.
-- `lib/Browser/Runner.pm` — Playwright execution (GET/POST/PNG, controller
+- `lib/Browser/Runner.pm` — Playwright execution (GET/POST, controller
   mode, CAPTCHA detection, response-document trust boundary).
+- `lib/Browser/Runner/Capture.pm` — PNG/PDF full-page file-output capture
+  (screenshot()/pdf()), extracted from Runner.pm (D2B-196). `run_png` and
+  `run_pdf` are both thin callers of a shared internal `_capture` helper
+  that owns path reservation, the directory guard, cleanup-on-failure,
+  and result-hashref assembly (D2B-197).
 - `lib/Browser/Runner/NodeRuntime.pm` — Node dependency install, version
   satisfaction, the shared install lock, and the minimum-Node-version
   check.

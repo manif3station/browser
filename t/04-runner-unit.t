@@ -10,6 +10,7 @@ use Test::More;
 use lib 'lib';
 use Browser::Runner;
 use Browser::Runner::VersionCompare ();
+use Browser::Runner::Capture ();
 
 ## Test doubles: fake Playwright/Page/Browser/Request/Response objects
 ## used by the integration-style tests throughout this file.
@@ -60,12 +61,23 @@ use Browser::Runner::VersionCompare ();
         return $_[0]{body_text} if $_[1] =~ /document\.body \? document\.body\.innerText/;
         return $_[0]{evaluate_return};
     }
+    sub emulateMedia { $_[0]{emulate_media_args} = $_[1]; return 1 }
     sub screenshot {
         my ( $self, $options ) = @_;
         $self->{screenshot_args} = $options;
         if ( my $path = $options->{path} ) {
             open my $fh, '>', $path or die "Unable to write fake screenshot $path: $!";
             print {$fh} "fake png\n";
+            close $fh;
+        }
+        return 1;
+    }
+    sub pdf {
+        my ( $self, $options ) = @_;
+        $self->{pdf_args} = $options;
+        if ( my $path = $options->{path} ) {
+            open my $fh, '>', $path or die "Unable to write fake pdf $path: $!";
+            print {$fh} "%PDF-1.4 fake\n";
             close $fh;
         }
         return 1;
@@ -254,21 +266,21 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     {
         my $tmp = tempdir( CLEANUP => 1 );
         local $ENV{TMPDIR} = $tmp;
-        my $path = Browser::Runner::_screenshot_path();
+        my $path = Browser::Runner::Capture::screenshot_path();
         # D2B-134: the random component is now File::Temp's own alphanumeric
         # charset (not strictly hex, since the path is atomically reserved
         # by File::Temp rather than hash-derived) - see the D2B-134 block
         # below for the atomicity assertion itself.
         like( $path, qr{\A$tmp/browser-\w+\.png\z}, 'screenshot_path defaults to TMPDIR with a generated .png filename' );
         unlink $path;
-        is( Browser::Runner::_screenshot_path('/tmp/example'), '/tmp/example.png', 'screenshot_path appends .png when missing' );
-        is( Browser::Runner::_screenshot_path('/tmp/example.png'), '/tmp/example.png', 'screenshot_path keeps an existing .png suffix unchanged' );
+        is( Browser::Runner::Capture::screenshot_path('/tmp/example'), '/tmp/example.png', 'screenshot_path appends .png when missing' );
+        is( Browser::Runner::Capture::screenshot_path('/tmp/example.png'), '/tmp/example.png', 'screenshot_path keeps an existing .png suffix unchanged' );
 
         # D2B-134: the default (no --file given) path must be atomically
         # and exclusively reserved by this process - not merely a computed
         # string that a race/symlink could pre-empt before Playwright's
         # screenshot() call ever opens it.
-        my $default_path = Browser::Runner::_screenshot_path();
+        my $default_path = Browser::Runner::Capture::screenshot_path();
         ok( -f $default_path, 'D2B-134: screenshot_path\'s default path already exists as a file at the moment it is returned (atomically reserved, not just computed)' );
         unlink $default_path;
     }
@@ -509,6 +521,140 @@ is( $png_result->{content_type}, undef, 'PNG payload keeps content_type undef wh
 is_deeply( $png_result->{headers}, {}, 'PNG payload exposes an empty headers map when the response provided none (D2B-115)' );
 ok( -f File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG request creates the screenshot file' );
 is( $png_playwright->{quit_count}, 1, 'request quits the Playwright handle after PNG' );
+
+# D2B-197 (Codex review): the _capture extraction must not overwrite
+# %args' own 'method' key with the normalized 'PNG'/'PDF' result label
+# before it reaches _interact_and_run_script/_run_controller_script - a
+# controller script's $method positional argument must see the caller's
+# original value, not this module's internal label, exactly the same
+# duplicate-key hash-flattening trap D2B-195 already fixed once elsewhere.
+{
+    my $controller_png_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 200 } ),
+            url      => 'https://example.test/final',
+            title    => 'Controller PNG',
+        }
+    );
+    my $controller_png_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $controller_png_page } ) } );
+    my $controller_png_runner = Browser::Runner->new( playwright_factory => sub { return $controller_png_playwright } );
+    my $controller_png_temp = tempdir( CLEANUP => 1 );
+    my $controller_png_result = $controller_png_runner->request(
+        method     => 'png',
+        url        => 'https://example.test',
+        file       => File::Spec->catfile( $controller_png_temp, 'shot' ),
+        controller => 1,
+        script     => 'return { seen_method => $method }',
+    );
+    is( $controller_png_result->{script_result}{seen_method}, 'png',
+        'PNG controller script sees the caller\'s original (lowercase) method value, not a normalized PNG label' );
+}
+
+
+## D2B-196: PDF/full-page-print request tests, mirroring the PNG block
+## above - browser.pdf uses Playwright's page->pdf() (Chromium DevTools'
+## printToPDF) instead of screenshot(), and is refused entirely for
+## firefox/webkit before a browser is even launched, since Playwright's
+## PDF export has no support for either.
+
+my $pdf_temp = tempdir( CLEANUP => 1 );
+my $pdf_page = FakePage->new(
+    {
+        response        => FakeResponse->new( { status => 200 } ),
+        url             => 'https://example.test/final',
+        title           => 'Example PDF',
+        evaluate_return => { width => 1234, height => 5678 },
+    }
+);
+my $pdf_playwright = FakePlaywright->new(
+    {
+        browser => FakeBrowser->new( { page => $pdf_page } ),
+    }
+);
+my $pdf_runner = Browser::Runner->new(
+    playwright_factory => sub { return $pdf_playwright },
+);
+my $pdf_result = $pdf_runner->request(
+    method => 'PDF',
+    url    => 'https://example.test',
+    file   => File::Spec->catfile( $pdf_temp, 'report' ),
+);
+is( $pdf_result->{method}, 'PDF', 'request returns PDF payloads' );
+is( $pdf_result->{file}, File::Spec->catfile( $pdf_temp, 'report.pdf' ), 'PDF payload reports the normalized pdf path' );
+is( $pdf_page->{pdf_args}{path}, File::Spec->catfile( $pdf_temp, 'report.pdf' ), 'PDF request sends the normalized path to the pdf helper' );
+ok( -f File::Spec->catfile( $pdf_temp, 'report.pdf' ), 'PDF request creates the pdf file' );
+is( $pdf_playwright->{quit_count}, 1, 'request quits the Playwright handle after PDF' );
+is( $pdf_page->{pdf_args}{width}, '1234px', 'PDF request sizes the page width to the evaluated document scrollWidth' );
+is( $pdf_page->{pdf_args}{height}, '5678px', 'PDF request sizes the page height to the evaluated document scrollHeight' );
+ok( $pdf_page->{pdf_args}{printBackground}, 'PDF request enables printBackground so CSS backgrounds are not dropped' );
+is( $pdf_page->{emulate_media_args}{media}, 'screen', 'PDF request forces screen media so the measured dimensions match what pdf() renders' );
+
+# D2B-197 (Codex review): same non-collision guarantee as the PNG
+# controller-script test above, for the PDF side of the shared _capture
+# extraction.
+{
+    my $controller_pdf_page = FakePage->new(
+        {
+            response        => FakeResponse->new( { status => 200 } ),
+            url             => 'https://example.test/final',
+            title           => 'Controller PDF',
+            evaluate_return => { width => 100, height => 100 },
+        }
+    );
+    my $controller_pdf_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $controller_pdf_page } ) } );
+    my $controller_pdf_runner = Browser::Runner->new( playwright_factory => sub { return $controller_pdf_playwright } );
+    my $controller_pdf_temp = tempdir( CLEANUP => 1 );
+    my $controller_pdf_result = $controller_pdf_runner->request(
+        method     => 'pdf',
+        url        => 'https://example.test',
+        file       => File::Spec->catfile( $controller_pdf_temp, 'report' ),
+        controller => 1,
+        script     => 'return { seen_method => $method }',
+    );
+    is( $controller_pdf_result->{script_result}{seen_method}, 'pdf',
+        'PDF controller script sees the caller\'s original (lowercase) method value, not a normalized PDF label' );
+}
+
+# D2B-196 (Codex round 1 follow-up): run_pdf must reject unusable
+# measurements instead of handing Playwright a nonsensical "0px"/"px"
+# size, and must never call pdf() when that happens.
+for my $case (
+    { label => 'zero width',    dims => { width => 0,     height => 100 }, error => qr/could not measure a usable page/ },
+    { label => 'negative height', dims => { width => 100, height => -5 }, error => qr/could not measure a usable page/ },
+    { label => 'missing width', dims => { width => undef, height => 100 }, error => qr/could not measure a usable page/ },
+    { label => 'non-numeric height', dims => { width => 100, height => 'tall' }, error => qr/could not measure a usable page/ },
+    { label => 'oversized width', dims => { width => 50_000, height => 100 }, error => qr/exceeds the 19200 px practical PDF page-size limit/ },
+    { label => 'evaluate() returning undef instead of a hashref', dims => undef, error => qr/did not return the expected \{width,height\} object/ },
+    { label => 'evaluate() returning an array instead of a hashref', dims => [ 100, 100 ], error => qr/did not return the expected \{width,height\} object/ },
+) {
+    my $bad_page = FakePage->new(
+        {
+            response        => FakeResponse->new( { status => 200 } ),
+            url             => 'https://example.test/final',
+            title           => 'Bad dimensions',
+            evaluate_return => $case->{dims},
+        }
+    );
+    my $bad_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $bad_page } ) } );
+    my $bad_runner = Browser::Runner->new( playwright_factory => sub { return $bad_playwright } );
+    eval { $bad_runner->request( method => 'PDF', url => 'https://example.test' ) };
+    like( $@, $case->{error}, "PDF request refuses to render with $case->{label}" );
+    ok( !exists $bad_page->{pdf_args}, "pdf() is never called when $case->{label} is measured" );
+}
+
+for my $unsupported_browser (qw(firefox webkit)) {
+    my $refusing_runner = Browser::Runner->new(
+        playwright_factory => sub { die 'A browser must never be launched for an unsupported PDF browser type' },
+    );
+    eval {
+        $refusing_runner->request(
+            method  => 'PDF',
+            url     => 'https://example.test',
+            browser => $unsupported_browser,
+        );
+    };
+    like( $@, qr/browser\.pdf only supports Chromium-based browsers/, "PDF request refuses --browser $unsupported_browser with a clear error" );
+}
 
 # D2B-115: PNG must expose content_type and the full response headers map,
 # matching GET/POST's shape (D2B-114), when the response provides headers.
@@ -841,6 +987,27 @@ is( $controller_result->{final_url}, 'https://example.test/final', 'controller m
 is( $controller_result->{title}, 'Final', 'controller mode captures the final page title after the script changes page state' );
 is( $controller_result->{script_result}{title}, 'Final', 'controller mode returns the Perl script result' );
 is( $controller_page->{clicks}[0], '#next', 'controller mode can call Playwright page methods from the Perl script' );
+
+# D2B-195: request() built each _run_get/_run_post/_run_png call as
+# (browser => $browser, playwright => $playwright, %args) - but %args
+# (the original CLI arg hash) already carries its own 'browser' key (the
+# requested browser-TYPE string, e.g. 'chrome'), and a duplicate hash key
+# resolves to its LAST occurrence when the callee flattens the list back
+# into a hash. Since %args was spread after the real objects, the type
+# string silently clobbered the real Browser object before it ever
+# reached the controller script.
+my $browser_identity_result = $controller_runner->request(
+    method     => 'GET',
+    url        => 'https://example.test/start',
+    controller => 1,
+    browser    => 'chrome',
+    script     => q{
+        my $new_page = $browser->newPage();
+        return { browser_class => ref($browser), new_page_class => ref($new_page) };
+    },
+);
+is( $browser_identity_result->{script_result}{browser_class}, 'FakeBrowser', 'controller mode exposes the real Browser object as $browser, not the requested browser-type string' );
+is( $browser_identity_result->{script_result}{new_page_class}, 'FakePage', '$browser is genuinely usable inside a controller script (newPage() works)' );
 is( $controller_page->{goto_args}[1]{waitUntil}, 'networkidle', 'controller mode without ask still uses networkidle for the starting page' );
 
 my $interactive_controller_page = FakePage->new(

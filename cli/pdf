@@ -1,0 +1,32 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use FindBin qw($Bin);
+use lib "$Bin/../lib";
+
+use Browser::CLI ();
+
+exit Browser::CLI::main( method => 'PDF', argv => \@ARGV );
+
+__END__
+
+=head1 NAME
+
+browser.pdf - Capture a full-page PDF with Playwright
+
+=head1 SYNOPSIS
+
+  dashboard browser.pdf <url> [OPTIONS]
+
+Chromium-based browsers only (chrome, chromium, edge) - Playwright's PDF
+export (Chromium DevTools' printToPDF) has no Firefox/WebKit support.
+
+See SKILLS.md (or C<dashboard browser.skills>) for the full flag reference
+and result payload shape.
+
+=head1 EXIT STATUS
+
+C<0> on success; C<2> on a usage error or an unhandled request failure.
+
+=cut

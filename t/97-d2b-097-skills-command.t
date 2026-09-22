@@ -37,7 +37,7 @@ is( $actual, $expected, "cli/skills' stdout matches SKILLS.md's file contents ex
 # request actually returns.
 like(
     $expected,
-    qr/PNG:(?:(?!Search:).)*script_result/s,
+    qr/PNG(?:\/PDF)?:(?:(?!Search:).)*script_result/s,
     'SKILLS.md documents script_result as part of PNG\'s result payload shape (D2B-132)'
 );
 

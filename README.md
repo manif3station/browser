@@ -26,6 +26,7 @@ Without a shared browser skill, quick browser tasks usually fragment into shell 
 - `dashboard browser.get <url>`
 - `dashboard browser.post <url>`
 - `dashboard browser.png <url>`
+- `dashboard browser.pdf <url>`
 - `dashboard browser.search <query>`
 - JavaScript page-context scripting through `--script`
 - Perl controller scripting through `--playwright`, `--agent`, or `--flow`
@@ -33,6 +34,7 @@ Without a shared browser skill, quick browser tasks usually fragment into shell 
 - interactive visible-browser takeover through `--ask` and `--askme`
 - HTML body, text body, status, final URL, and CAPTCHA detection in the output payload
 - screenshot capture with a printed PNG file path
+- full-page PDF capture with a printed PDF file path (Chromium-based browsers only, D2B-196)
 - structured, ranked web search results with automatic CAPTCHA-triggered engine fallback
 
 ## Developer Dashboard Feature Added
@@ -42,6 +44,7 @@ This skill adds:
 - the dotted command `dashboard browser.get`
 - the dotted command `dashboard browser.post`
 - the dotted command `dashboard browser.png`
+- the dotted command `dashboard browser.pdf`
 - the dotted command `dashboard browser.search`
 - the dotted command `dashboard browser.skills`
 - a DD skill example that depends on `aptfile`, `brewfile`, `cpanfile`, and `package.json`
@@ -51,10 +54,12 @@ This skill adds:
 - `cli/get` GET entrypoint
 - `cli/post` POST entrypoint
 - `cli/png` screenshot entrypoint
+- `cli/pdf` PDF entrypoint
 - `cli/search` search entrypoint
 - `cli/skills` browser.skills agent-manual entrypoint
 - `lib/Browser/CLI.pm` CLI parsing and JSON output
-- `lib/Browser/Runner.pm` Playwright execution orchestration (GET/POST/PNG, controller mode)
+- `lib/Browser/Runner.pm` Playwright execution orchestration (GET/POST, controller mode)
+- `lib/Browser/Runner/Capture.pm` PNG/PDF full-page file-output capture, extracted from Runner.pm (D2B-196); `run_png`/`run_pdf` are both thin callers of a shared internal `_capture` helper (path reservation, directory guard, cleanup-on-failure, result-assembly) that owns everything except each format's own write callback (screenshot() for PNG; emulateMedia/evaluate/dimension-validation/pdf() for PDF) (D2B-197)
 - `lib/Browser/Runner/NodeRuntime.pm` Node dependency install/version-satisfaction and the shared install lock
 - `lib/Browser/Runner/VersionCompare.pm` semver-subset comparison (exact/`*`/`latest`/caret-range specs), extracted from NodeRuntime.pm (D2B-155)
 - `lib/Browser/Runner/BrowserPath.pm` browser binary discovery/validation and Playwright launch options
@@ -189,6 +194,32 @@ Example output:
 /tmp/browser-g7Zegnat6TicyRMS.png
 ```
 
+## PDF Usage
+
+`browser.pdf` (D2B-196) captures a full-page PDF via Playwright's Chromium DevTools `printToPDF` and prints the saved path to stdout, mirroring `browser.png`'s `--file` conventions exactly (appends `.pdf` when omitted, keeps an existing `.pdf` suffix unchanged, writes to a random tmp path when `--file` is omitted entirely):
+
+```bash
+dashboard browser.pdf https://example.com --file /tmp/example-report
+```
+
+Output:
+
+```text
+/tmp/example-report.pdf
+```
+
+PDF export is a Chromium-only Playwright capability - `--browser firefox`/`webkit` is refused with a clear error before a browser is even launched, since neither supports `page->pdf()` at all:
+
+```bash
+dashboard browser.pdf https://example.com --browser firefox
+```
+
+```text
+browser.pdf only supports Chromium-based browsers (chrome, chromium, edge) - Playwright's PDF export has no Firefox/WebKit support
+```
+
+`browser.pdf` measures the page's rendered `scrollWidth`/`scrollHeight` under `screen` media (forced explicitly, since Chromium's PDF export otherwise renders under `print` media by default) and sizes the PDF to exactly that, so the output is one continuous page rather than Playwright's default paginated US-Letter output. The measurement must resolve to a `{width, height}` object with positive numeric values no greater than 19200px (roughly 200in at 96dpi, Chromium's practical PDF page-size limit) - a missing, non-numeric, zero, negative, oversized, or otherwise malformed measurement is refused with a clear error before `pdf()` is ever called.
+
 ## Mode Selection
 
 Use JavaScript mode when:
@@ -219,7 +250,7 @@ Do not use `--jquery` for Perl logic:
 - Perl controller scripts run outside the page
 - if a Perl controller script needs jQuery-powered extraction, call `$page->evaluate(...)` and use `window.jQuery(...)` inside that JavaScript
 
-`browser.png` also runs `--script`/`--jquery` before taking its screenshot (D2B-131), so a script can dismiss a cookie banner or scroll to an element first - the script's return value appears in the result's `script_result` field, matching `browser.get`/`browser.post`, at the Perl API level (`Browser::Runner->request()`'s return value). This parity does not extend to the `dashboard browser.png` CLI's own stdout, though: that CLI only ever prints the saved screenshot's file path, unlike `browser.get`/`browser.post`'s CLI output, which prints the full JSON result including `script_result` (D2B-136). A failing script (or a missing jQuery runtime with `--jquery`) now makes `browser.png` fail too, exactly like `browser.get`/`browser.post` already do - it is no longer immune to script errors the way the old silent no-op was.
+`browser.png`/`browser.pdf` also run `--script`/`--jquery` before taking their screenshot/PDF (D2B-131, D2B-196), so a script can dismiss a cookie banner or scroll to an element first - the script's return value appears in the result's `script_result` field, matching `browser.get`/`browser.post`, at the Perl API level (`Browser::Runner->request()`'s return value). This parity does not extend to either command's own CLI stdout, though: `dashboard browser.png`/`dashboard browser.pdf` only ever print the saved file's path, unlike `browser.get`/`browser.post`'s CLI output, which prints the full JSON result including `script_result` (D2B-136). A failing script (or a missing jQuery runtime with `--jquery`) makes `browser.png`/`browser.pdf` fail too, exactly like `browser.get`/`browser.post` already do - neither is immune to script errors the way an old silent no-op once was.
 
 ## Script Types
 
@@ -461,7 +492,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 21. `--engines` tolerates whitespace around the commas (e.g. `--engines "bing, google"` or `--engines "  duckduckgo  ,  bing  "`) - each name is trimmed before being looked up, rather than failing with "Unknown engine" on the untrimmed, space-padded value.
 22. `browser.search` result `title`/`snippet`/`url` fields have common HTML entities decoded (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, numeric decimal/hex entities like `&#39;`/`&#x27;`, and common typographic entities - `&nbsp;`, `&mdash;`, `&ndash;`, `&lsquo;`/`&rsquo;`, `&ldquo;`/`&rdquo;`, `&hellip;`, `&copy;`, `&trade;`, `&reg;` - D2B-176) - a result whose source markup encodes an ampersand or apostrophe returns the real character, not the literal entity text. This matters most for `url`: search-engine result markup routinely HTML-entity-encodes the ampersand separating query-string parameters in an `href`, so without decoding, `url` would contain the literal `&amp;` sequence instead of `&`, corrupting the query string for anything that re-uses that URL.
 23. A numeric HTML entity naming a UTF-16 surrogate codepoint (`&#xD800;`-`&#xDFFF;`, e.g. `&#xD800;` or the decimal form `&#56320;`) is left as literal entity text rather than decoded - surrogate codepoints are not valid standalone Unicode characters, and decoding one would produce invalid UTF-8 in the JSON output instead of the real character a valid entity represents.
-24. `--file` is refused on `browser.get`/`browser.post` with a clear "--file is only read by browser.png - it has no effect on GET/POST" error, instead of being silently accepted and ignored - only `browser.png` reads it.
+24. `--file` is refused on `browser.get`/`browser.post` with a clear "--file is only read by browser.png/browser.pdf - it has no effect on GET/POST" error, instead of being silently accepted and ignored - only `browser.png`/`browser.pdf` read it (D2B-196).
 25. `--timeout-ms` is refused with "--timeout-ms must not be negative" on `browser.get`/`browser.post`/`browser.png`, matching `browser.search`'s own negativity guard - a negative value never silently reaches Playwright's native timeout option.
 26. `--engines` tolerates an empty segment from a leading, trailing, or doubled comma (e.g. `--engines ,bing` or `bing,,google`) by silently dropping it, rather than dying with an unhelpful blank "Unknown engine: " error - an `--engines` value naming only empty segments still refuses with "named no engines at all".
 27. `browser.post`'s `final_url` result field reports the actual HTTP response URL instead of the page's untouched `about:blank` default when nothing navigates the page after the POST (the common case for a plain, non-controller POST). If a controller script, the response body's own embedded script, or manual `--ask` interaction deliberately navigates the page back to literally `about:blank`, that is indistinguishable from never having navigated at all, and `final_url` still reports the response URL in that rare case rather than the literal string `about:blank` - `about:blank` was never a useful answer to report either way.
@@ -475,6 +506,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 35. `--timeout-ms 0` on `browser.get`/`browser.post`/`browser.png` (and `browser.search`) is accepted and passed straight through to Playwright, which conventionally treats a `0` timeout as *disabling* the navigation timeout entirely, not as an instant/zero-wait request - a `0` value can genuinely hang rather than fail fast. This is distinct from `--ask`/`--askme`'s own no-timeout default, which produces the same underlying `timeout: 0` behavior but via omitting `--timeout-ms` altogether rather than passing it explicitly - D2B-172.
 36. The `--` end-of-options escape from items 31/32 is itself honored even when the escaped positional value is literally `--help` or `--version` - `dashboard browser.get -- --version` treats `--version` as the literal URL rather than a version request, and `dashboard browser.search -- --help` treats `--help` as the literal query rather than a help request (D2B-186).
 37. `--browser edge` launches Microsoft Edge via Playwright's `channel: 'msedge'` launch option rather than an `executablePath` - unlike `chrome`/`chromium`, it never inherits `CHROMIUM_BIN` or a PATH/direct-location-detected binary, even when one is configured (D2B-192).
+38. `browser.pdf` is refused with a clear error naming the Chromium-only restriction when `--browser firefox`/`webkit` is requested, before a browser is ever launched - Playwright's PDF export (Chromium DevTools' `printToPDF`) has no Firefox/WebKit support at all (D2B-196).
 
 ## Continuous Integration
 

@@ -11,6 +11,7 @@ use File::Temp qw(tempfile);
 use JSON::PP qw(encode_json);
 
 use Browser::Runner::BrowserPath ();
+use Browser::Runner::Capture ();
 use Browser::Runner::NodeRuntime ();
 
 sub new {
@@ -21,7 +22,17 @@ sub new {
 sub request {
     my ( $self, %args ) = @_;
     my $method = uc( $args{method} || q{} );
-    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG';
+    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG' && $method ne 'PDF';
+
+    # D2B-196: PDF export (Chromium DevTools' printToPDF, via Playwright's
+    # page->pdf()) is a Chromium-only capability - Firefox/WebKit do not
+    # implement it at all. Refused here, before ever launching a browser,
+    # rather than letting Playwright's own native error surface.
+    if ( $method eq 'PDF' ) {
+        my $normalized = lc( defined $args{browser} ? $args{browser} : 'chrome' );
+        die "browser.pdf only supports Chromium-based browsers (chrome, chromium, edge) - Playwright's PDF export has no Firefox/WebKit support"
+          if $normalized eq 'firefox' || $normalized eq 'webkit';
+    }
 
     my $playwright = $self->{playwright_factory}
       ? $self->{playwright_factory}->(%args)
@@ -34,11 +45,20 @@ sub request {
     eval {
         $browser = $playwright->launch( Browser::Runner::BrowserPath::_launch_options(%args) );
         $page    = $browser->newPage();
+        # D2B-195: %args already carries its own 'browser' key (the
+        # requested browser-TYPE string, e.g. 'chrome') - spreading it
+        # after the real $browser/$playwright objects below let that
+        # string win the duplicate-key hash-flattening resolution inside
+        # _run_get/_run_post/_run_png, silently replacing the real
+        # Playwright::Browser object with a plain string before it ever
+        # reached a controller script. The real objects must come last.
         $result = $method eq 'GET'
-          ? _run_get( $page, browser => $browser, playwright => $playwright, %args )
+          ? _run_get( $page, %args, browser => $browser, playwright => $playwright )
           : $method eq 'POST'
-          ? _run_post( $page, browser => $browser, playwright => $playwright, %args )
-          : _run_png( $page, browser => $browser, playwright => $playwright, %args );
+          ? _run_post( $page, %args, browser => $browser, playwright => $playwright )
+          : $method eq 'PNG'
+          ? Browser::Runner::Capture::run_png( $page, %args, browser => $browser, playwright => $playwright )
+          : Browser::Runner::Capture::run_pdf( $page, %args, browser => $browser, playwright => $playwright );
         1;
     } or do {
         my $error = $@ || 'Unknown browser skill error';
@@ -56,27 +76,6 @@ sub _new_playwright {
     return Playwright->new();
 }
 
-sub _screenshot_path {
-    my ($requested) = @_;
-    if ( defined $requested && $requested ne q{} ) {
-        return $requested if $requested =~ /\.png\z/i;
-        return $requested . '.png';
-    }
-
-    # D2B-134: reserve the default path atomically and exclusively via
-    # File::Temp (O_CREAT|O_EXCL under the hood), instead of merely
-    # computing a hash-derived path string for Playwright to write to -
-    # closing the window where another process/symlink could pre-empt it.
-    my ( $fh, $path ) = tempfile(
-        'browser-' . ( 'X' x 16 ),
-        SUFFIX => '.png',
-        DIR    => File::Spec->tmpdir(),
-        UNLINK => 0,
-    );
-    close $fh or die "Unable to close reserved screenshot path $path: $!";
-    return $path;
-}
-
 sub _defined_or_empty {
     my ($value) = @_;
     return defined $value ? $value : q{};
@@ -85,7 +84,7 @@ sub _defined_or_empty {
 sub _run_get {
     my ( $page, %args ) = @_;
     my $response = $page->goto( $args{url}, _goto_options(%args) );
-    my $script_result = _interact_and_run_script( $page, response => $response, %args );
+    my $script_result = _interact_and_run_script( $page, %args, response => $response );
     my $headers   = $response ? ( $response->headers() || {} ) : {};
     my $body      = $page->content();
     my $body_text = _page_text($page);
@@ -154,7 +153,7 @@ sub _run_post {
             body   => $body,
         }
     ) . '; return true;' );
-    my $script_result = _interact_and_run_script( $page, response => $response, %args );
+    my $script_result = _interact_and_run_script( $page, %args, response => $response );
 
     # D2B-092: setContent() (used above to display the POST response
     # body) never itself navigates the page, so a plain, non-scripted
@@ -222,64 +221,6 @@ sub _interact_and_run_script {
     _await_user(%args) if $args{interactive};
     _maybe_inject_jquery( $page, %args );
     return _run_script( $page, %args );
-}
-
-sub _run_png {
-    my ( $page, %args ) = @_;
-    my $response = $page->goto( $args{url}, _goto_options(%args) );
-
-    # D2B-131 (review follow-up): validate --file before running the
-    # script/jquery below, so a bad --file fails fast without ever
-    # running a script with real side effects on the page.
-    my $owns_file = !( defined $args{file} && $args{file} ne q{} );
-    my $file = _screenshot_path( $args{file} );
-
-    my $script_result;
-    my $ok = eval {
-        # D2B-131 (review follow-up): validate --file before running the
-        # script/jquery below, so a bad --file fails fast without ever
-        # running a script with real side effects on the page. D2B-135
-        # (review follow-up): this validation and make_path also run
-        # inside the protected block, so a failure here is cleaned up
-        # the same way a later script/screenshot failure is.
-        die "--file points at an existing directory: $file" if -d $file;
-        my $dir = dirname($file);
-        make_path($dir) if defined $dir && $dir ne q{} && !-d $dir;
-
-        # D2B-131: run --script/--jquery before the screenshot, mirroring
-        # _run_get/_run_post, instead of silently ignoring both flags.
-        $script_result = _interact_and_run_script( $page, response => $response, %args );
-
-        $page->screenshot(
-            {
-                path     => $file,
-                fullPage => JSON::PP::true,
-            }
-        );
-        1;
-    };
-    if ( !$ok ) {
-        my $error = $@;
-        # D2B-135: only clean up the placeholder this call itself reserved
-        # (D2B-134) - a user-supplied --file is never deleted by this skill.
-        unlink $file if $owns_file;
-        die $error;
-    }
-
-    my $headers = $response ? ( $response->headers() || {} ) : {};
-
-    my $result = {
-        method        => 'PNG',
-        requested_url => $args{url},
-        final_url     => $page->url(),
-        status        => $response ? $response->status() : undef,
-        title         => _defined_or_empty( eval { $page->title() } ),
-        content_type  => $headers->{'content-type'},
-        headers       => $headers,
-        file          => $file,
-    };
-    $result->{script_result} = $script_result if defined $args{script};
-    return $result;
 }
 
 sub _run_script {

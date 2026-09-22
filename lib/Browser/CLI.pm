@@ -59,7 +59,7 @@ sub main {
     my ( $exit_code, $result ) = _run_and_report_errors( \&execute, $output_fh, $error_fh, %args );
     return $exit_code if defined $exit_code;
 
-    if ( uc( $args{method} || q{} ) eq 'PNG' ) {
+    if ( uc( $args{method} || q{} ) eq 'PNG' || uc( $args{method} || q{} ) eq 'PDF' ) {
         print {$output_fh} $result->{file}, "\n";
         return 0;
     }
@@ -72,7 +72,7 @@ sub main {
 # instead of printing usage and exiting cleanly, as is conventional.
 sub _usage_get_post_png {
     my ($method) = @_;
-    my $verb = $method eq 'GET' ? 'browser.get' : $method eq 'POST' ? 'browser.post' : 'browser.png';
+    my $verb = $method eq 'GET' ? 'browser.get' : $method eq 'POST' ? 'browser.post' : $method eq 'PNG' ? 'browser.png' : 'browser.pdf';
     return <<USAGE;
 Usage: $verb URL [OPTIONS]
 
@@ -83,12 +83,13 @@ Usage: $verb URL [OPTIONS]
   --agent                 Alias for --playwright
   --flow                  Alias for --playwright
   --data TEXT             POST body (browser.post only)
-  --browser NAME          chrome (default), chromium, firefox, webkit, or edge (case-insensitive)
+  --browser NAME          chrome (default), chromium, firefox, webkit, or edge (case-insensitive) -
+                          browser.pdf only supports chrome/chromium/edge (Chromium-only PDF export)
   --headless / --no-headless   Run headless (default) or with a visible browser window
   --ask / --askme         Open a visible browser and wait for manual confirmation before continuing
-  --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png only)
-  --timeout-ms N          Navigation timeout in milliseconds (browser.get/browser.png only)
-  --file PATH             Screenshot destination path (browser.png only)
+  --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png/browser.pdf only)
+  --timeout-ms N          Navigation timeout in milliseconds (browser.get/browser.png/browser.pdf only)
+  --file PATH             Screenshot/PDF destination path (browser.png/browser.pdf only)
   --help                  Print this usage text and exit
   --version               Print the installed skill's version and exit
 USAGE
@@ -199,7 +200,7 @@ sub execute {
     my (%args) = @_;
     my @argv = @{ $args{argv} || [] };
     my $method = uc( $args{method} || q{} );
-    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG';
+    die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG' && $method ne 'PDF';
 
     return { help => 1, usage => _usage_get_post_png($method) } if _argv_requests_help( \@argv );
     return { version => 1, version_string => _read_version() } if _argv_requests_version( \@argv );
@@ -238,10 +239,10 @@ sub execute {
       if defined $options{timeout_ms} && $options{timeout_ms} < 0;
 
     my @flag_guards = (
-        [ data       => 'browser.post',           sub { $_[0] ne 'POST' } ],
-        [ wait_until => 'browser.get/browser.png', sub { $_[0] eq 'POST' } ],
-        [ timeout_ms => 'browser.get/browser.png', sub { $_[0] eq 'POST' } ],
-        [ file       => 'browser.png',             sub { $_[0] ne 'PNG' } ],
+        [ data       => 'browser.post',                       sub { $_[0] ne 'POST' } ],
+        [ wait_until => 'browser.get/browser.png/browser.pdf', sub { $_[0] eq 'POST' } ],
+        [ timeout_ms => 'browser.get/browser.png/browser.pdf', sub { $_[0] eq 'POST' } ],
+        [ file       => 'browser.png/browser.pdf',             sub { $_[0] ne 'PNG' && $_[0] ne 'PDF' } ],
     );
     for my $guard (@flag_guards) {
         my ( $key, $reader, $blocked ) = @$guard;

@@ -17,6 +17,8 @@ dashboard browser.post https://example.com/form
 dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
 dashboard browser.png https://example.com
 dashboard browser.png https://example.com --file /tmp/example-shot
+dashboard browser.pdf https://example.com
+dashboard browser.pdf https://example.com --file /tmp/example-report
 dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
 dashboard browser.search 'query' --engine google
 dashboard browser.search 'query' --engines duckduckgo,bing --max 5
@@ -25,9 +27,9 @@ dashboard browser.get --help
 dashboard browser.get --version
 ```
 
-`--help` prints usage text and exits 0 for any of the four commands, taking priority over every other flag or missing-argument validation - it works even with no URL/query given, and even combined with other flags. `--version` prints the installed skill's version (read from `.env`) and exits 0 the same way (D2B-124) - `--help` still wins if both are given. `browser.skills` prints this skill's `SKILLS.md` agent manual.
+`--help` prints usage text and exits 0 for any of the five commands, taking priority over every other flag or missing-argument validation - it works even with no URL/query given, and even combined with other flags. `--version` prints the installed skill's version (read from `.env`) and exits 0 the same way (D2B-124) - `--help` still wins if both are given. `browser.skills` prints this skill's `SKILLS.md` agent manual.
 
-`browser.get`/`browser.post`/`browser.png` all run headless by default; `--headless`/`--no-headless` sets it explicitly, useful for watching a non-interactive run without pausing for manual input. `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect on a non-interactive run.
+`browser.get`/`browser.post`/`browser.png`/`browser.pdf` all run headless by default; `--headless`/`--no-headless` sets it explicitly, useful for watching a non-interactive run without pausing for manual input. `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect on a non-interactive run.
 
 Local repository usage during development:
 
@@ -35,6 +37,7 @@ Local repository usage during development:
 perl cli/get https://example.com
 perl cli/post https://example.com/form --data 'name=dashboard'
 perl cli/png https://example.com --file /tmp/example-shot
+perl cli/pdf https://example.com --file /tmp/example-report
 perl cli/search 'query'
 ```
 
@@ -44,7 +47,7 @@ perl cli/search 'query'
 
 For `browser.get`, the payload also includes the page title and the rendered page HTML body. For `browser.post`, the payload also includes the response body so the caller can inspect returned content from the CLI.
 
-`browser.png` prints only the saved PNG file path to stdout.
+`browser.png`/`browser.pdf` print only the saved file path to stdout (D2B-196).
 
 Example:
 
@@ -83,6 +86,14 @@ If `--file` is omitted, the skill writes to a generated tmp path under `/tmp` an
 If `--file` is supplied without a `.png` suffix, the skill appends `.png`.
 
 If `--file` already ends in `.png`, the skill keeps the filename as-is and does not add another suffix.
+
+## PDF Behavior
+
+`browser.pdf` (D2B-196) captures the rendered page after navigation and writes one PDF file, via Playwright's Chromium DevTools `printToPDF` - the same `--file` conventions as `browser.png` apply exactly (generated tmp path when omitted, `.pdf` appended when missing, kept as-is when already present).
+
+PDF export is a Chromium-only Playwright capability: `--browser firefox`/`webkit` is refused with "browser.pdf only supports Chromium-based browsers (chrome, chromium, edge) - Playwright's PDF export has no Firefox/WebKit support" before a browser is ever launched, rather than reaching Playwright and surfacing an opaque native error.
+
+The rendered page is measured (`document.documentElement.scrollWidth`/`scrollHeight`, under `screen` media forced explicitly to match what `pdf()` renders) and that size is passed straight to `pdf()`'s `width`/`height`, so the export is a single page sized to the content instead of Playwright's default paginated US-Letter output. `printBackground` is also enabled, since Chromium's PDF export otherwise drops CSS background colors/images unlike `screenshot()`. The measurement must resolve to a `{width, height}` object with positive numeric values no greater than 19200px (~200in at 96dpi, Chromium's practical PDF page-size limit) - a missing, non-numeric, zero, negative, oversized, or otherwise malformed measurement is refused with a clear error before `pdf()` runs.
 
 ## Script Behavior
 
@@ -303,7 +314,8 @@ dashboard browser.get "$url" --script 'return document.title'
 - a URL argument is refused as missing when it is undefined, an empty string, or whitespace-only (D2B-156) - a URL that happens to be the single character `0` is accepted and used as-is, not rejected by Perl truthiness
 - `--browser` only accepts `chrome`, `chromium`, `firefox`, `webkit`, or `edge` - an unrecognised value is refused with a clear "Unsupported browser type" error before ever reaching Playwright. Matching is case-insensitive - `--browser Chrome` or `--browser WEBKIT` resolve the same as their lowercase forms (D2B-185).
 - `--timeout-ms` is refused with "--timeout-ms must not be negative" on `browser.get`/`browser.post`/`browser.png`, matching `browser.search`'s own negativity guard on its own `--timeout-ms`. `0` is accepted (it is not negative) and passed straight through to Playwright, which conventionally treats a `0` timeout as *disabling* the navigation timeout entirely, not "instant" - it can genuinely hang (D2B-172)
-- `--file` is refused on `browser.get`/`browser.post` with "--file is only read by browser.png - it has no effect on GET/POST" - only `browser.png` reads it
+- `--file` is refused on `browser.get`/`browser.post` with "--file is only read by browser.png/browser.pdf - it has no effect on GET/POST" - only `browser.png`/`browser.pdf` read it (D2B-196)
+- `browser.pdf` (D2B-196) captures a full-page PDF via Playwright's Chromium DevTools `printToPDF` and prints only the saved PDF file path to stdout, mirroring `browser.png`'s `--file` conventions exactly - Chromium-based browsers only: `--browser firefox`/`webkit` is refused with a clear error before a browser is ever launched, since neither supports `page->pdf()` at all
 - `--script` is refused with "--script must not be empty" when passed an explicit empty string, in both plain JS mode and controller mode (`--playwright`/`--agent`/`--flow`) - omitting `--script` entirely remains an unaffected silent no-op in plain JS mode (D2B-158). In controller mode, omitting `--script` entirely is refused with "Controller mode requires --script" too, matching the empty-string case (D2B-184).
 - `browser.post`'s `final_url` reports the actual response URL, not the page's untouched `about:blank` default, for a plain POST that nothing navigates afterward - setContent() (used to inject the response body for display) does not itself navigate the page. The one disclosed limitation: if a controller script, the response body's own embedded script, or manual `--ask` interaction deliberately navigates the page back to literally `about:blank`, that is indistinguishable from never having navigated, and `final_url` still reports the response URL rather than the literal string `about:blank` in that rare case (D2B-092)
 - `browser.get`/`browser.post`/`browser.png` default to a headless browser; `--headless`/`--no-headless` sets it explicitly - but `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` (D2B-093)
