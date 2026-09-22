@@ -1,5 +1,28 @@
 Revision history for browser
 
+0.169 2026-09-22
+ - (D2B-202 follow-up, live-verified) 0.168's "perl -S cpanm" fix for
+   the Windows Clone.xs failure was live-verified NOT to work - a
+   fresh workflow run showed the identical "Clone.c: loadable library
+   and perl binaries are mismatched" error on every windows-latest job
+   even with that change applied and confirmed running exactly as
+   intended in the job log. Investigated further: this is a known,
+   open, unresolved bug in shogo82148/actions-setup-perl (issue #2310)
+   affecting its default Windows Perl 5.40 artifact - the issue itself
+   carries no maintainer-confirmed root cause, only the same symptom
+   reported across several Perl versions. Real fix: added
+   'distribution: strawberry' to the action's Windows step, installing
+   actual Strawberry Perl instead of the buggy default artifact (the
+   action's own docs confirm this input falls back to the default
+   distribution on non-Windows platforms, so the line is
+   unconditional). Kept the 0.168 "perl -S cpanm" change as a harmless
+   defensive practice, but corrected its comment to stop claiming it
+   was the fix. t/193's assertion updated to check for
+   distribution: strawberry instead. Codex review PASS (also caught
+   and fixed an invalid empty-string GitHub Actions expression in an
+   earlier draft of this fix, and the stale 0.168-era comments/Changes
+   text this entry corrects).
+
 0.168 2026-09-22
  - (D2B-202, live-verified via 2 real GitHub Actions runs) fixed a
    pre-existing, systemic Windows-only defect blocking the

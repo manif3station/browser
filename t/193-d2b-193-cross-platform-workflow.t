@@ -72,17 +72,19 @@ like(
     'the workflow documents, in a comment, why Linux ARM64 is excluded from the edge combination (Microsoft ships no Edge build for Linux ARM64)'
 );
 
-# D2B-202: live-verified (2 separate real runs) that windows-latest jobs
-# fail with "Clone.c: loadable library and perl binaries are mismatched"
-# during the Perl launch step - a two-Perl-installations-on-PATH ABI
-# mismatch between whatever compiled Clone.xs during the cpanm install
-# step and whatever later runs cli/get. Forcing cpanm to run under the
-# exact same 'perl' invocation ('perl -S cpanm' instead of bare 'cpanm')
-# removes the ambiguity.
+# D2B-202: live-verified (3 separate real runs) that windows-latest jobs
+# fail with "Clone.c: loadable library and perl binaries are mismatched".
+# An initial fix ('perl -S cpanm' instead of bare 'cpanm') was live-
+# verified NOT to resolve it - the real cause is a known, open,
+# unresolved bug in shogo82148/actions-setup-perl (issue #2310): its
+# default Windows Perl 5.40 artifact mixes Strawberry Perl's bundled
+# gcc with a mismatched Perl core when compiling XS extensions.
+# distribution: strawberry installs actual Strawberry Perl instead,
+# which bundles its own matched compiler and avoids the bug entirely.
 like(
     $raw_yaml,
-    qr/perl\s+-S\s+cpanm/,
-    "the Install Perl dependencies step runs cpanm via 'perl -S cpanm', not bare cpanm, to guarantee the same Perl interpreter compiles and later loads XS modules (D2B-202)"
+    qr/distribution:\s*\$\{\{[^}]*strawberry[^}]*\}\}|distribution:\s*strawberry/,
+    "the Windows Perl setup uses distribution: strawberry, avoiding actions-setup-perl's known Windows XS-compile bug (issue #2310, D2B-202)"
 );
 
 done_testing();

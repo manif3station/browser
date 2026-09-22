@@ -45,16 +45,26 @@ jobs:
       - uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: '5.40'
+          # D2B-202: live-verified across 3 real runs that this action's
+          # default Windows Perl 5.40 artifact fails to compile/load XS
+          # extensions correctly ("Clone.c: loadable library and perl
+          # binaries are mismatched") - a known, open, unresolved bug
+          # (shogo82148/actions-setup-perl#2310; the issue itself does
+          # not carry a maintainer-confirmed root cause, only the same
+          # symptom reported across several Perl versions). distribution:
+          # strawberry installs actual Strawberry Perl instead, which
+          # avoids the bug. This is a Windows-only input - the action's
+          # own docs confirm it falls back to the default distribution
+          # on every other platform, so this line is unconditional.
+          distribution: strawberry
 
       - name: Install Perl dependencies
-        # D2B-202: live-verified that windows-latest jobs failed with
-        # "Clone.c: loadable library and perl binaries are mismatched" -
-        # a two-Perl-installations-on-PATH ABI mismatch between whatever
-        # compiled Clone's XS extension here and whatever later runs
-        # cli/get. 'perl -S cpanm' forces cpanm to run under this exact
-        # invoking perl instead of trusting cpanm's own resolved
-        # shebang, which may point at a different Perl (e.g. a
-        # pre-installed Strawberry Perl already on the runner's PATH).
+        # D2B-202: 'perl -S cpanm' (rather than bare 'cpanm') forces
+        # cpanm to run under this exact invoking perl instead of
+        # trusting its own resolved shebang - a reasonable defensive
+        # practice, though live-verified NOT to be the actual fix for
+        # the Windows Clone.xs failure by itself (see the
+        # distribution: strawberry line above for the real fix).
         run: perl -S cpanm --quiet --notest --installdeps .
 
       - name: Install Node dependencies (pins the exact Playwright version from package.json)
