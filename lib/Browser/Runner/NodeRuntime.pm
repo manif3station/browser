@@ -201,8 +201,10 @@ sub _install_node_runtime {
     print {$workspace_fh} qq|{"name":"browser-skill-runtime","version":"1.0.0","private":true}\n|;
     close $workspace_fh;
 
+    # D2B-187: no longer skips Playwright's own postinstall browser
+    # download - this was the only install path, so skipping it left
+    # firefox/webkit and the CHROMIUM_BIN fallback unable to launch.
     my $cwd = getcwd();
-    local $ENV{PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD} = 1;
     eval {
         chdir $workspace or die "Unable to chdir to $workspace for browser skill package.json dependency install: $!";
         _run_quiet_command( 'npx', '--yes', 'npm', 'install', @specs );

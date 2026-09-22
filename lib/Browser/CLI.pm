@@ -83,7 +83,7 @@ Usage: $verb URL [OPTIONS]
   --agent                 Alias for --playwright
   --flow                  Alias for --playwright
   --data TEXT             POST body (browser.post only)
-  --browser NAME          chrome (default), chromium, firefox, or webkit (case-insensitive)
+  --browser NAME          chrome (default), chromium, firefox, webkit, or edge (case-insensitive)
   --headless / --no-headless   Run headless (default) or with a visible browser window
   --ask / --askme         Open a visible browser and wait for manual confirmation before continuing
   --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png only)

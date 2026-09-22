@@ -1366,8 +1366,18 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
 # all - a naive File::Spec->catfile('', ...) fallback would otherwise
 # silently produce a nonsensical relative path like
 # "Google/Chrome/Application/chrome.exe" instead of being skipped.
+#
+# D2B-194: this only tests the PROGRAMFILES/LOCALAPPDATA-derived
+# candidates, not the function's whole output - _browser_candidates()
+# also does an unconditional PATH scan on every platform (by design),
+# so PATH must be neutralized here too, or this assertion silently
+# depends on the running environment never having a real
+# chromium/chromium-browser/google-chrome/google-chrome-stable/chrome
+# command on PATH, which is false in a container that genuinely
+# installs those browsers.
 {
     local $^O = 'MSWin32';
+    local $ENV{PATH} = q{};
     local $ENV{PROGRAMFILES};
     local $ENV{'PROGRAMFILES(X86)'};
     local $ENV{LOCALAPPDATA};

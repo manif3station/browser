@@ -1,5 +1,83 @@
 Revision history for browser
 
+0.164 2026-09-22
+ - fixed two tests that silently assumed no real browser/Node
+   environment could ever exist, both discovered live while fixing an
+   unrelated local Docker test-image build. t/04-runner-unit.t's D2B-126
+   subtest ("browser_candidates produces no candidates on Windows when
+   every root env var is unset") never neutralized PATH, so it silently
+   depended on the running environment never having a real
+   chromium/google-chrome binary on PATH - now local $ENV{PATH} = q{}
+   isolates the assertion. t/03-playwright-get-post.t interpolated
+   qx{NODE_PATH="$ENV{NODE_PATH}" ...} directly; an undef NODE_PATH (the
+   normal case in a fresh shell, since NODE_PATH is only ever set by
+   NodeRuntime.pm at runtime) crashed the test with a FATAL
+   uninitialized-value warning before any plan printed - now guarded
+   with a $node_path = $ENV{NODE_PATH} // q{} variable. Fixing that
+   crash then surfaced a third issue: the test's own browser search
+   picked /usr/bin/chromium-browser (Debian/Ubuntu's transitional
+   snap-stub package, present on PATH but nonfunctional without snapd)
+   over the genuinely-working google-chrome-stable - added
+   _find_usable_browser_command, which rejects a candidate whose
+   --version invocation exits nonzero (a lightweight liveness check,
+   not a guarantee of Playwright launchability) before accepting it. With all three fixed, t/03 ran a
+   genuine real (non-mocked) end-to-end Playwright launch for the first
+   time this session - 35/35 assertions passed live (GET/POST/PNG/
+   jQuery/flow/CAPTCHA), which also live-confirms 0.162's
+   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD fix actually works. Full suite:
+   963/963.
+
+0.163 2026-09-22
+ - added .github/workflows/cross-platform.yml: this repo had no CI
+   verifying a real (non-mocked) Playwright browser launch on any
+   platform - every existing t/*.t test injects a mock
+   playwright_factory. The new workflow matrix launches each of
+   chrome/chromium/firefox/webkit against a bundled local static test
+   page (t/fixtures/static-page.html, to avoid live-URL flakiness) on
+   ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, and
+   windows-latest - Windows arm64 is intentionally absent (not a
+   generally-available GitHub-hosted runner) with a comment explaining
+   why. edge is deferred from the matrix until D2B-192 ships. New
+   structural test at t/193-d2b-193-cross-platform-workflow.t (9
+   assertions). README.md's new Continuous Integration section
+   documents the workflow. Part of epic BPC-003; requested directly by
+   the owner.
+
+0.162 2026-09-22
+ - fixed lib/Browser/Runner/NodeRuntime.pm's _install_node_runtime: it
+   unconditionally set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 before running
+   npm install, and this was the only install path anywhere in the
+   codebase (confirmed via grep - no separate 'playwright install' call
+   exists). Playwright's own chromium/firefox/webkit/edge browser
+   binaries were therefore never downloaded under any code path - on a
+   genuinely fresh environment (no prior unskipped Playwright install
+   ever run on the machine), --browser firefox/webkit and the
+   CHROMIUM_BIN-unusable fallback (D2B-118) would fail with "Executable
+   doesn't exist" instead of actually working, even though both are
+   documented as working. Removed the skip flag entirely - npm install
+   now runs its normal postinstall browser download. New test at
+   t/187-d2b-187-browser-download-not-skipped.t (a structural regression
+   guard, mirroring t/34-d2b-034-dead-code-removed.t's precedent, since
+   a live network-dependent install repro is out of scope for this
+   suite's Docker container). Full suite (103 files, 953 tests) passes
+   unchanged. Found via a scheduled fork-hunt; masked on the development
+   machine itself by a pre-existing global Playwright browser cache
+   populated by something unrelated to this skill.
+
+0.161 2026-09-22
+ - added lib/Browser/Runner/BrowserPath.pm support for --browser edge:
+   Playwright has no separate "edge" browser type - Microsoft Edge is
+   launched by requesting the Chromium type with a launch channel
+   (channel: 'msedge'), not an executablePath. Added 'edge' to
+   @SUPPORTED_BROWSER_TYPES; when the resolved browser is edge,
+   _launch_options now sets type=>'chrome' and channel=>'msedge',
+   and explicitly skips the CHROMIUM_BIN/executablePath path (channel
+   and executablePath are mutually exclusive in Playwright's own
+   launch() API). New test at t/192-d2b-192-edge-browser-support.t
+   (8 assertions, 2 genuinely failed pre-fix). README.md/SKILLS.md/
+   docs/usage.md updated. Part of epic BPC-003 (cross-platform CI
+   matrix); requested directly by the owner.
+
 0.160 2026-09-22
  - fixed lib/Browser/CLI.pm's _argv_requests_help/_argv_requests_version:
    the pre-Getopt raw-argv scan for a literal --help/--version element

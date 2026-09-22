@@ -1,13 +1,22 @@
 use strict;
 use warnings FATAL => 'all';
 
+use File::Spec;
 use JSON::PP qw(decode_json);
 use IO::Socket::INET;
 use Test::More;
 use Time::HiRes qw(sleep);
 
 my $node_bin = _find_command('node');
-my $chromium_bin = $ENV{CHROMIUM_BIN} || _find_command(qw(chromium chromium-browser google-chrome google-chrome-stable)) || q{};
+my $chromium_bin = $ENV{CHROMIUM_BIN} || _find_usable_browser_command(qw(chromium chromium-browser google-chrome google-chrome-stable)) || q{};
+
+# D2B-194: NODE_PATH is only ever set by NodeRuntime.pm at runtime,
+# inside the child cli/get process itself - it is not guaranteed to be
+# pre-set in this parent test's own shell environment. Interpolating an
+# undef $ENV{NODE_PATH} directly into the qx{} strings below would
+# otherwise trigger an uninitialized-value warning, fatal under this
+# file's own "use warnings FATAL => 'all'", before any test plan prints.
+my $node_path = $ENV{NODE_PATH} // q{};
 
 plan skip_all => 'Playwright integration test requires node and a usable Chromium (configured, on PATH, or Playwright-bundled)'
   if !$node_bin || ( !$chromium_bin && !_playwright_bundled_browser_installed() );
@@ -24,7 +33,7 @@ if ( $pid == 0 ) {
 eval {
     _wait_for_port($port);
 
-    my $get_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/get --script 'return { title: document.title, heading: document.querySelector("h1").textContent }' 2>&1};
+    my $get_output = qx{NODE_PATH="$node_path" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/get --script 'return { title: document.title, heading: document.querySelector("h1").textContent }' 2>&1};
     my $get_exit = $? >> 8;
     is( $get_exit, 0, "browser.get exits cleanly\n$get_output" );
     my $get_payload = decode_json($get_output);
@@ -37,13 +46,13 @@ eval {
     ok( !$get_payload->{is_captcha}, 'browser.get does not mark normal pages as captcha pages' );
     is( $get_payload->{script_result}{heading}, 'Browser Skill', 'browser.get evaluates Playwright script against the DOM' );
 
-    my $jquery_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/get --jquery --script 'return typeof window.jQuery === "function" ? window.jQuery("h1").first().text() : null' 2>&1};
+    my $jquery_output = qx{NODE_PATH="$node_path" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/get --jquery --script 'return typeof window.jQuery === "function" ? window.jQuery("h1").first().text() : null' 2>&1};
     my $jquery_exit = $? >> 8;
     is( $jquery_exit, 0, "browser.get injects jquery when requested\n$jquery_output" );
     my $jquery_payload = decode_json($jquery_output);
     is( $jquery_payload->{script_result}, 'Browser Skill', 'browser.get scripts can use injected jQuery' );
 
-    my $flow_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/flow-start --flow --script 'my \$response = \$page->goto("http://127.0.0.1:$port/flow-next", { waitUntil => "networkidle" }); return { title => \$page->title(), url => \$page->url(), status => \$response->status() };' 2>&1};
+    my $flow_output = qx{NODE_PATH="$node_path" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/flow-start --flow --script 'my \$response = \$page->goto("http://127.0.0.1:$port/flow-next", { waitUntil => "networkidle" }); return { title => \$page->title(), url => \$page->url(), status => \$response->status() };' 2>&1};
     my $flow_exit = $? >> 8;
     is( $flow_exit, 0, "browser.get accepts controller flow scripts\n$flow_output" );
     my $flow_payload = decode_json($flow_output);
@@ -51,14 +60,14 @@ eval {
     is( $flow_payload->{title}, 'Flow Final', 'controller flow updates the final title after navigation' );
     is( $flow_payload->{script_result}{status}, 200, 'controller flow can use Playwright response objects inside the Perl script' );
 
-    my $captcha_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/captcha 2>&1};
+    my $captcha_output = qx{NODE_PATH="$node_path" CHROMIUM_BIN="$chromium_bin" $^X cli/get http://127.0.0.1:$port/captcha 2>&1};
     my $captcha_exit = $? >> 8;
     is( $captcha_exit, 0, "browser.get handles captcha-like pages\n$captcha_output" );
     my $captcha_payload = decode_json($captcha_output);
     ok( $captcha_payload->{is_captcha}, 'browser.get marks captcha-like pages' );
     like( $captcha_payload->{body_text}, qr/unusual traffic/i, 'browser.get returns readable captcha body text' );
 
-    my $post_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/post http://127.0.0.1:$port/post --data 'name=dashboard' --script 'return { heading: document.querySelector("h1").textContent, status: window.__BROWSER_POST__.status, body: document.body.textContent.trim() }' 2>&1};
+    my $post_output = qx{NODE_PATH="$node_path" CHROMIUM_BIN="$chromium_bin" $^X cli/post http://127.0.0.1:$port/post --data 'name=dashboard' --script 'return { heading: document.querySelector("h1").textContent, status: window.__BROWSER_POST__.status, body: document.body.textContent.trim() }' 2>&1};
     my $post_exit = $? >> 8;
     is( $post_exit, 0, "browser.post exits cleanly\n$post_output" );
     my $post_payload = decode_json($post_output);
@@ -73,7 +82,7 @@ eval {
 
     my $tmp_dir = _temp_dir();
     my $png_path = "$tmp_dir/browser-shot";
-    my $png_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" $^X cli/png http://127.0.0.1:$port/get --file '$png_path' 2>&1};
+    my $png_output = qx{NODE_PATH="$node_path" CHROMIUM_BIN="$chromium_bin" $^X cli/png http://127.0.0.1:$port/get --file '$png_path' 2>&1};
     my $png_exit = $? >> 8;
     is( $png_exit, 0, "browser.png exits cleanly\n$png_output" );
     chomp $png_output;
@@ -83,7 +92,7 @@ eval {
 
     my $tmp_default = _temp_dir();
     local $ENV{TMPDIR} = $tmp_default;
-    my $default_png_output = qx{NODE_PATH="$ENV{NODE_PATH}" CHROMIUM_BIN="$chromium_bin" TMPDIR="$tmp_default" $^X cli/png http://127.0.0.1:$port/get 2>&1};
+    my $default_png_output = qx{NODE_PATH="$node_path" CHROMIUM_BIN="$chromium_bin" TMPDIR="$tmp_default" $^X cli/png http://127.0.0.1:$port/get 2>&1};
     my $default_png_exit = $? >> 8;
     is( $default_png_exit, 0, "browser.png default tmp path exits cleanly\n$default_png_output" );
     chomp $default_png_output;
@@ -217,6 +226,32 @@ sub _find_command {
         my $path = qx{command -v $candidate 2>/dev/null};
         chomp $path;
         return $path if $path;
+    }
+    return;
+}
+
+# D2B-194: on Debian/Ubuntu, "chromium-browser" is often a transitional
+# stub package requiring the chromium *snap* to actually be installed -
+# `command -v` finds it, but invoking it just prints an install-the-snap
+# message and exits nonzero. Picking that stub over a genuinely working
+# later candidate (e.g. google-chrome-stable) breaks this test in any
+# environment with that stub package present. Skip a candidate that
+# exists on PATH but does not actually run.
+sub _find_usable_browser_command {
+    for my $candidate (@_) {
+        my $path = qx{command -v $candidate 2>/dev/null};
+        chomp $path;
+        next if !$path;
+        open my $devnull, '>', File::Spec->devnull or die "Unable to open devnull: $!";
+        open my $saved_stdout, '>&', \*STDOUT or die "Unable to save STDOUT: $!";
+        open my $saved_stderr, '>&', \*STDERR or die "Unable to save STDERR: $!";
+        open STDOUT, '>&', $devnull or die "Unable to redirect STDOUT: $!";
+        open STDERR, '>&', $devnull or die "Unable to redirect STDERR: $!";
+        system( $path, '--version' );
+        open STDOUT, '>&', $saved_stdout or die "Unable to restore STDOUT: $!";
+        open STDERR, '>&', $saved_stderr or die "Unable to restore STDERR: $!";
+        next if $? != 0;
+        return $path;
     }
     return;
 }

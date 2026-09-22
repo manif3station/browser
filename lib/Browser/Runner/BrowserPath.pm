@@ -7,7 +7,7 @@ use File::Spec;
 
 use Browser::Runner::NodeRuntime ();
 
-my @SUPPORTED_BROWSER_TYPES = qw(chrome chromium firefox webkit);
+my @SUPPORTED_BROWSER_TYPES = qw(chrome chromium firefox webkit edge);
 
 sub _launch_options {
     my (%args) = @_;
@@ -15,12 +15,18 @@ sub _launch_options {
     my $normalized = lc($requested);
     die "Unsupported browser type: $requested (expected one of: @SUPPORTED_BROWSER_TYPES)"
       if !grep { $_ eq $normalized } @SUPPORTED_BROWSER_TYPES;
-    my $type = $normalized eq 'chromium' ? 'chrome' : $normalized;
+    my $type = ( $normalized eq 'chromium' || $normalized eq 'edge' ) ? 'chrome' : $normalized;
     my %launch = (
         headless => $args{headless} ? 1 : 0,
         type     => $type,
     );
-    if ( $type eq 'chrome' ) {
+    if ( $normalized eq 'edge' ) {
+        # D2B-192: Playwright has no separate "edge" browser type - Edge is
+        # launched by requesting the Chromium type with a channel, not an
+        # executablePath (the two are mutually exclusive in launch()).
+        $launch{channel} = 'msedge';
+    }
+    elsif ( $type eq 'chrome' ) {
         if ( my $path = _validated_browser_path() ) {
             $launch{executablePath} = $path;
         }

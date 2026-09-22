@@ -1,0 +1,58 @@
+# D2B-193: verifies a real (non-mocked) Playwright browser launch on
+# every supported OS/arch/browser-type combination this skill claims to
+# support. Every existing t/*.t test injects a mock playwright_factory,
+# so this is the only place a genuine browser launch is ever exercised.
+#
+# os covers amd64+arm64 for Linux and macOS via distinct GitHub-hosted
+# runner labels (arch is baked into the label, not a separate matrix
+# dimension): ubuntu-latest (amd64), ubuntu-24.04-arm (arm64),
+# macos-latest (arm64, Apple Silicon by default), macos-13 (amd64,
+# Intel). Windows arm64 is intentionally absent from this matrix - it is
+# not a generally-available GitHub-hosted runner as of this writing, so
+# windows-latest (amd64) is the only Windows entry until GitHub offers
+# one.
+#
+# browser is chrome/chromium/firefox/webkit only for now - edge is
+# deferred until D2B-192 ships (it adds the --browser edge support this
+# workflow would otherwise be testing against nothing).
+name: Cross-platform browser launch
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  real-launch:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
+        browser: [chrome, chromium, firefox, webkit]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.40'
+
+      - name: Install Perl dependencies
+        run: cpanm --quiet --notest --installdeps .
+
+      - name: Install Node dependencies (pins the exact Playwright version from package.json)
+        run: npm install
+
+      - name: Install Playwright's ${{ matrix.browser }} browser binary
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Compute a portable file:// URL for the static fixture (Windows needs file:///C:/... not file://C:\...)
+        id: fixture
+        run: node -e "console.log('url=' + require('url').pathToFileURL(require('path').resolve('t/fixtures/static-page.html')).href)" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Real browser launch (not mocked) - invokes cli/get directly, not the dashboard wrapper (Developer Dashboard is not installed on a fresh runner)
+        run: perl -Ilib cli/get "${{ steps.fixture.outputs.url }}" --browser ${{ matrix.browser }}

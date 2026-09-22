@@ -46,11 +46,13 @@ version from `.env` and exiting 0 - `--help` wins if both are given.
   `--browser --version`) is misinterpreted the same way, since the whole
   argument list is scanned before any flag value is parsed - only the
   equals-form (`--flag=--help`) is safe for any flag (D2B-140).
-- `--browser NAME` — `chrome` (default), `chromium`, `firefox`, `webkit`
-  (case-insensitive, e.g. `Chrome`/`WEBKIT` are accepted the same as the
-  matching lowercase form, D2B-185). Only `chrome`/`chromium` read
+- `--browser NAME` — `chrome` (default), `chromium`, `firefox`, `webkit`,
+  `edge` (case-insensitive, e.g. `Chrome`/`WEBKIT` are accepted the same as
+  the matching lowercase form, D2B-185). Only `chrome`/`chromium` read
   `CHROMIUM_BIN`/PATH auto-detection; firefox/webkit always launch
-  Playwright's own bundled binary.
+  Playwright's own bundled binary. `edge` launches Microsoft Edge via
+  Playwright's `channel: 'msedge'` option (Edge shares Chromium's engine,
+  so it never gets `CHROMIUM_BIN`/`executablePath` treatment - D2B-192).
 - `--headless` / `--no-headless` — default headless=1. `--ask`/`--askme`
   unconditionally force headless off, overriding an explicit `--headless`.
 - `--ask` / `--askme` — visible browser, waits for a real keypress on
