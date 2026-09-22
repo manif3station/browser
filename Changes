@@ -1,5 +1,25 @@
 Revision history for browser
 
+0.168 2026-09-22
+ - (D2B-202, live-verified via 2 real GitHub Actions runs) fixed a
+   pre-existing, systemic Windows-only defect blocking the
+   platform-test gate: every windows-latest job in
+   .github/workflows/cross-platform.yml (all 5 browsers) failed
+   identically with "Clone.c: loadable library and perl binaries are
+   mismatched" during the real browser-launch step - a two-Perl-
+   installations-on-PATH ABI mismatch, most likely between a
+   pre-installed Strawberry Perl already on the runner's PATH and
+   shogo82148/actions-setup-perl's own separately-installed Perl.
+   Fixed by running the dependency-install step as "perl -S cpanm"
+   instead of bare "cpanm", forcing cpanm to execute under the exact
+   same Perl interpreter that later runs cli/get, removing the
+   ambiguity. Confirmed pre-existing (present in the prior run too,
+   before D2B-198/199/200/201's own push) and systemic (identical
+   failure across all 5 browser types). Codex review PASS (confirmed
+   the reasoning sound; noted a viable but not clearly better
+   alternative). New t/193-... assertion guards against this
+   regressing. Full suite: 1016/1016.
+
 0.167 2026-09-22
  - (D2B-201, direct owner instruction) removed the legacy tickets/
    folder (DD-019 through DD-033, EPIC-007 through EPIC-010, SOW.md,

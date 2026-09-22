@@ -72,4 +72,17 @@ like(
     'the workflow documents, in a comment, why Linux ARM64 is excluded from the edge combination (Microsoft ships no Edge build for Linux ARM64)'
 );
 
+# D2B-202: live-verified (2 separate real runs) that windows-latest jobs
+# fail with "Clone.c: loadable library and perl binaries are mismatched"
+# during the Perl launch step - a two-Perl-installations-on-PATH ABI
+# mismatch between whatever compiled Clone.xs during the cpanm install
+# step and whatever later runs cli/get. Forcing cpanm to run under the
+# exact same 'perl' invocation ('perl -S cpanm' instead of bare 'cpanm')
+# removes the ambiguity.
+like(
+    $raw_yaml,
+    qr/perl\s+-S\s+cpanm/,
+    "the Install Perl dependencies step runs cpanm via 'perl -S cpanm', not bare cpanm, to guarantee the same Perl interpreter compiles and later loads XS modules (D2B-202)"
+);
+
 done_testing();
