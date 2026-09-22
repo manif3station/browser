@@ -7,10 +7,19 @@
 # runner labels (arch is baked into the label, not a separate matrix
 # dimension): ubuntu-latest (amd64), ubuntu-24.04-arm (arm64),
 # macos-latest (arm64, Apple Silicon by default), macos-13 (amd64,
-# Intel). Windows arm64 is intentionally absent from this matrix - it is
-# not a generally-available GitHub-hosted runner as of this writing, so
-# windows-latest (amd64) is the only Windows entry until GitHub offers
-# one.
+# Intel).
+#
+# D2B-203: windows-latest is excluded entirely. D2B-202 fixed its
+# Clone.xs ABI mismatch (distribution: strawberry, still present below
+# for when Windows is restored), but that exposed a second, deeper
+# issue: the CPAN Playwright module's own Windows support is
+# documented upstream as an experimental, separate implementation
+# (teodesian/playwright-perl#22, open) that spawns its Node driver via
+# a single-string 'start /MIN ...' + netstat-polling with no real error
+# capture, and it fails to spawn at all in this environment for every
+# browser identically. That is a genuine upstream limitation, not
+# something to patch by vendoring a fix to someone else's CPAN module
+# inside this skill's own repo.
 #
 # browser is chrome/chromium/edge/firefox/webkit (D2B-200: edge added
 # now that D2B-192 shipped --browser edge support). ubuntu-24.04-arm is
@@ -29,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13]
         browser: [chrome, chromium, edge, firefox, webkit]
         exclude:
           - os: ubuntu-24.04-arm

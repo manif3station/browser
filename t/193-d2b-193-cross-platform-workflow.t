@@ -38,7 +38,11 @@ SKIP: {
 
     ok( ( grep { /ubuntu/i } @os_list ), 'matrix os list includes a Linux runner' );
     ok( ( grep { /macos/i } @os_list ),  'matrix os list includes a macOS runner' );
-    ok( ( grep { /windows/i } @os_list ), 'matrix os list includes a Windows runner' );
+    # D2B-203: windows-latest removed entirely - the CPAN Playwright
+    # module's own documented-experimental Windows support fails to
+    # spawn its Node driver reliably on this runner (a separate,
+    # deeper issue than D2B-202's now-fixed Clone.xs ABI mismatch).
+    ok( !( grep { /windows/i } @os_list ), 'matrix os list no longer includes windows-latest (D2B-203)' );
 
     # D2B-200: edge shipped in D2B-192 and is now included in the
     # matrix - the workflow's own header comment previously deferred it
@@ -56,10 +60,13 @@ if ( open my $fh, '<', $workflow_path ) {
     local $/;
     $raw_yaml = <$fh>;
 }
+# D2B-203: windows-latest was removed entirely (superseding the old
+# "windows arm64 absent" caveat, since no Windows entry remains at
+# all) - the workflow must document why in a comment.
 like(
     $raw_yaml,
-    qr/windows.{0,80}arm64|arm64.{0,80}windows/is,
-    'the workflow documents, in a comment, why Windows arm64 is absent from the matrix rather than silently omitting it'
+    qr/windows-latest.{0,200}(excluded|playwright-perl)/is,
+    'the workflow documents, in a comment, why windows-latest is excluded entirely (D2B-203)'
 );
 unlike(
     $raw_yaml,

@@ -1,5 +1,33 @@
 Revision history for browser
 
+0.170 2026-09-23
+ - (D2B-203, live-verified) removed windows-latest entirely from
+   .github/workflows/cross-platform.yml's os matrix. D2B-202's
+   distribution: strawberry fix for the Clone.xs ABI mismatch is
+   confirmed genuinely working (the handshake-key error is completely
+   gone in a fresh run) - but that exposed a second, separate, deeper
+   issue underneath it: every windows-latest job (all 5 browsers)
+   failed identically with "playwright server failed to spawn!" after
+   ~90 seconds. Researched via Codex web search: the CPAN Playwright
+   module's own Windows support is documented upstream as an
+   experimental, separate implementation (teodesian/playwright-perl#22,
+   open) that launches its Node driver via a single-string 'start
+   /MIN ...' + netstat-polling with its own health-check hard-coded to
+   return success on Windows, so real spawn failures surface only as
+   an opaque timeout. This is a genuine upstream limitation, not
+   something to fix by patching a vendored copy of someone else's CPAN
+   module inside this skill's own repo. Owner decision (2026-09-23,
+   asked directly): exclude windows-latest from the matrix rather than
+   continue chasing the upstream module's experimental Windows
+   support. D2B-202's distribution: strawberry fix and its comments
+   are kept in the workflow as dormant documentation for if/when
+   Windows is ever restored. t/193's assertions updated to match
+   (Windows-runner-absent check flipped; the old windows-arm64-absent
+   check replaced with a windows-latest-exclusion-documented check).
+   Codex review PASS (independently ran t/193, 12/12 green, since
+   local Docker access remained blocked by an unrelated infra issue
+   throughout this investigation).
+
 0.169 2026-09-22
  - (D2B-202 follow-up, live-verified) 0.168's "perl -S cpanm" fix for
    the Windows Clone.xs failure was live-verified NOT to work - a
