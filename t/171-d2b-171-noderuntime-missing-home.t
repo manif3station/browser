@@ -13,12 +13,16 @@ use Browser::Runner::NodeRuntime;
 # thing; this test proves and documents it.
 
 {
-    local $ENV{HOME} = q{};
+    # D2B-199: also clear USERPROFILE, so this proves the "neither set"
+    # case specifically, not just "HOME unset" (which now falls back to
+    # USERPROFILE on Windows-shaped environments).
+    local $ENV{HOME}        = q{};
+    local $ENV{USERPROFILE} = q{};
     eval { Browser::Runner::NodeRuntime::_ensure_node_runtime() };
     like(
         $@,
-        qr/HOME is required for browser skill Node dependencies/,
-        '_ensure_node_runtime fails clearly when HOME is not set'
+        qr/HOME \(or USERPROFILE on Windows\) is required for browser skill Node dependencies/,
+        '_ensure_node_runtime fails clearly when neither HOME nor USERPROFILE is set'
     );
 }
 

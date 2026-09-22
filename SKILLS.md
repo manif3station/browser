@@ -3,7 +3,7 @@
 This is the condensed, agent-facing reference for the `browser` Developer
 Dashboard skill. For narrative background see `README.md`; for worked
 examples see `docs/usage.md`; for ticket-level status, see this project's
-Tira board, not markdown files in `tickets/`.
+Tira board.
 
 ## Commands
 
@@ -173,9 +173,13 @@ D2B-196). Search:
   `run_pdf` are both thin callers of a shared internal `_capture` helper
   that owns path reservation, the directory guard, cleanup-on-failure,
   and result-hashref assembly (D2B-197).
-- `lib/Browser/Runner/NodeRuntime.pm` — Node dependency install, version
-  satisfaction, the shared install lock, and the minimum-Node-version
-  check.
+- `lib/Browser/Runner/NodeRuntime.pm` — Node dependency version
+  satisfaction, the shared install lock, the runtime stamp file, and the
+  minimum-Node-version check.
+- `lib/Browser/Runner/NodeRuntime/Install.pm` — the npm-install workspace
+  cluster (`install_node_runtime`, current-dependency-tree replacement, the portable
+  recursive copy), extracted from NodeRuntime.pm to keep it under the
+  500-line guideline (D2B-198).
 - `lib/Browser/Runner/VersionCompare.pm` — semver-subset comparison
   (exact/`*`/`latest`/caret-range specs), extracted from
   NodeRuntime.pm (D2B-155).

@@ -1,5 +1,75 @@
 Revision history for browser
 
+0.167 2026-09-22
+ - (D2B-201, direct owner instruction) removed the legacy tickets/
+   folder (DD-019 through DD-033, EPIC-007 through EPIC-010, SOW.md,
+   TESTING.md) - this project's Tira board is now the system of record
+   for ticket-level status, and SKILLS.md already pointed readers there
+   instead. Removed the corresponding references from README.md's
+   Layout section, SKILLS.md's intro, and docs/overview.md's live
+   architecture description (Codex round 1 caught the overview.md one;
+   round 2 PASS). Historical/dated records (this Changes file's own
+   past entries, docs/changes/2026-04-21-browser-gating.md) were
+   deliberately left untouched, since they describe what was true at
+   the time, not a live claim about current repo structure. New
+   t/201-... regression test proves the folder stays gone and neither
+   doc references it. Full suite: 1015/1015.
+ - (D2B-200, self-raised improvement) added edge to the
+   .github/workflows/cross-platform.yml browser matrix (chrome/chromium/
+   edge/firefox/webkit) now that D2B-192's --browser edge support has
+   shipped - the workflow's own header comment previously deferred edge
+   explicitly until D2B-192 shipped, and had gone stale. ubuntu-24.04-arm
+   is excluded from the edge combination entirely, since Microsoft ships
+   no Edge build for Linux ARM64 at all (unlike chrome, which just
+   needed installing under the chromium name, D2B-199 - there is no
+   substitute install target for edge on that platform). Playwright's
+   own install CLI names the Edge channel "msedge", not "edge", so the
+   install step maps this skill's --browser edge value to that install
+   target name specifically. Codex review PASS. t/193's browser-list
+   assertion and stale-comment checks updated to match. Full suite:
+   1012/1012.
+ - (D2B-198, self-raised improvement) extracted the npm-install
+   workspace cluster (install_node_runtime, current-dependency-tree replacement, the
+   portable recursive copy) from lib/Browser/Runner/NodeRuntime.pm into
+   a new lib/Browser/Runner/NodeRuntime/Install.pm module, mirroring the
+   VersionCompare.pm (D2B-155) and Capture.pm (D2B-196) precedent -
+   NodeRuntime.pm had grown to 491 lines after D2B-199's Windows fix,
+   within 9 lines of the 500-line guideline. install_node_runtime is now
+   public (the module's main entrypoint); _clear_installed_node_modules/
+   _recursive_copy_dir keep their private names. Pure refactor, no
+   behavior change - all three call back into NodeRuntime.pm's shared
+   _required_arg/_make_path_if_missing/_run_quiet_command/
+   _package_json_dependency_specs/_package_json_dependency_map fully-
+   qualified. Codex review PASS. Live-verified in Docker: a real npm
+   install via a fresh HOME still populates node_modules (including
+   playwright) correctly. New t/198-... structural test (mirroring
+   D2B-155's own test pattern) plus updated call sites in t/04/t/31/
+   t/187. NodeRuntime.pm now 370 lines, Install.pm 143 lines. Full
+   suite: 1010/1010. 100% statement+subroutine coverage maintained.
+ - (D2B-199, live-verified via a real GitHub Actions run) fixed 2 genuine
+   defects blocking the platform-test gate every ticket now passes
+   through: (1) lib/Browser/Runner/NodeRuntime.pm's home-root lookup did
+   a bare $ENV{HOME}||die - Windows never sets HOME (it sets
+   USERPROFILE instead), so every browser.* invocation died
+   unconditionally on windows-latest regardless of browser, confirmed
+   against run 35764460588's failing windows-latest+firefox job. Fixed
+   by extracting a shared _home_root() helper that falls back to
+   USERPROFILE, used by both NodeRuntime.pm and Runner.pm's
+   _jquery_path. (2) .github/workflows/cross-platform.yml's chrome
+   browser-install step failed on ubuntu-24.04-arm with "ERROR: not
+   supported on Linux Arm64" - Playwright's own installer refuses the
+   branded "chrome" channel entirely on Linux ARM64. Fixed by
+   substituting chromium as the install target for that one
+   os+browser combination only; the runtime --browser chrome flag is
+   unaffected, since this skill's chrome type has no executablePath set
+   on a fresh runner anyway and already launches Playwright's bundled
+   chromium build regardless of install-target name. Codex review PASS.
+   New regression test (t/199-...) proving the USERPROFILE fallback;
+   t/155's D2B-155-era <480-line NodeRuntime.pm guard widened to the
+   real 500-line workspace guideline after the new helper pushed it to
+   491 lines (D2B-198 is queued to bring it down further). Full suite:
+   1005/1005. 100% statement+subroutine coverage maintained.
+
 0.166 2026-09-22
  - (D2B-197, self-raised improvement) deduplicated run_png/run_pdf's
    shared capture scaffolding in lib/Browser/Runner/Capture.pm: both now

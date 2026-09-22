@@ -60,14 +60,14 @@ This skill adds:
 - `lib/Browser/CLI.pm` CLI parsing and JSON output
 - `lib/Browser/Runner.pm` Playwright execution orchestration (GET/POST, controller mode)
 - `lib/Browser/Runner/Capture.pm` PNG/PDF full-page file-output capture, extracted from Runner.pm (D2B-196); `run_png`/`run_pdf` are both thin callers of a shared internal `_capture` helper (path reservation, directory guard, cleanup-on-failure, result-assembly) that owns everything except each format's own write callback (screenshot() for PNG; emulateMedia/evaluate/dimension-validation/pdf() for PDF) (D2B-197)
-- `lib/Browser/Runner/NodeRuntime.pm` Node dependency install/version-satisfaction and the shared install lock
+- `lib/Browser/Runner/NodeRuntime.pm` Node dependency version-satisfaction, the shared install lock, and the runtime stamp file
+- `lib/Browser/Runner/NodeRuntime/Install.pm` the npm-install workspace cluster (`install_node_runtime`, current-dependency-tree replacement before a staged install, the portable recursive copy), extracted from NodeRuntime.pm to keep it under the 500-line guideline (D2B-198)
 - `lib/Browser/Runner/VersionCompare.pm` semver-subset comparison (exact/`*`/`latest`/caret-range specs), extracted from NodeRuntime.pm (D2B-155)
 - `lib/Browser/Runner/BrowserPath.pm` browser binary discovery/validation and Playwright launch options
 - `lib/Browser/Search.pm` multi-engine search fallback strategy and per-engine result parsing
 - `aptfile`, `brewfile`, `package.json`, and `cpanfile` dependency declarations
 - `t/` tests
 - `docs/` skill docs
-- `tickets/` project-management records
 - `.env` version metadata
 - `Changes` changelog
 
@@ -78,6 +78,8 @@ Install the skill into Developer Dashboard by repo name:
 ```bash
 dashboard skills install browser
 ```
+
+The skill's own home-root lookup (used to locate this `node_modules` tree and the jQuery runtime, not any literal `$HOME`-prefixed command below) falls back to `$ENV{USERPROFILE}` when `$ENV{HOME}` is unset (D2B-199) - Windows never sets `HOME` itself, only `USERPROFILE`, and a bare `$ENV{HOME} || die` died on every Windows invocation regardless of browser until this fallback was added; `HOME` still wins whenever both are set, on every platform.
 
 Developer Dashboard installs the skill's `package.json` runtime into `$HOME` using the DD Node dependency path (`NODE_PATH` is joined with the platform's own path-list separator - `:` on Unix, `;` on Windows - never a hardcoded one). The stale-check-and-install sequence for that shared `$HOME/node_modules` tree holds an exclusive file lock for its whole duration, so two concurrent `browser.get`/`browser.post`/`browser.png` invocations that both find the runtime stale cannot race each other's clear-and-copy and corrupt the shared tree - the second invocation simply waits for the first to finish. The skill also verifies that installed module versions still satisfy `package.json`, and if they do not, it stages a fresh `npx --yes npm install ...` under the DD cache and replaces the stale module trees before launching Playwright. Only module directories still named in the current `package.json` are cleared this way - a directory left over from a dependency later removed from `package.json` is deliberately left untouched, since `$HOME/node_modules` is the user's real home directory, not one this skill exclusively owns, so clearing anything not explicitly still-expected risks destroying an unrelated `node_modules` tree kept there for something else entirely (D2B-128, investigated and accepted as a known limitation rather than fixed). A `^0.y.z` dependency spec follows npm's own caret rules for pre-1.0 versions: `^0.0.z` only ever matches that exact patch version, and `^0.y.z` (y>0) matches any patch within that same minor version - neither accepts a different minor or major version the way a `^1.y.z` spec would. The skill's own `package.json` is read from disk and JSON-decoded at most once per stale-runtime check (cached by path+mtime), rather than separately for the fingerprint, the install spec list, and the installed-version comparison.
 
@@ -510,7 +512,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 
 ## Continuous Integration
 
-`.github/workflows/cross-platform.yml` runs a real (non-mocked) Playwright browser launch on every push/pull request, across `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest`, `macos-13`, and `windows-latest` for each of `chrome`/`chromium`/`firefox`/`webkit` - the only place a genuine launch is exercised, since every `t/*.t` test in this repo mocks Playwright instead. Windows arm64 is intentionally absent - it is not a generally-available GitHub-hosted runner as of this writing. `edge` is deferred from the matrix until D2B-192 ships (D2B-193).
+`.github/workflows/cross-platform.yml` runs a real (non-mocked) Playwright browser launch on every push/pull request, across `ubuntu-latest`, `ubuntu-24.04-arm`, `macos-latest`, `macos-13`, and `windows-latest` for each of `chrome`/`chromium`/`edge`/`firefox`/`webkit` - the only place a genuine launch is exercised, since every `t/*.t` test in this repo mocks Playwright instead. Windows arm64 is intentionally absent - it is not a generally-available GitHub-hosted runner as of this writing. The chrome-install step substitutes `chromium` for `ubuntu-24.04-arm` specifically, since Playwright's own installer refuses the branded `chrome` channel entirely on Linux ARM64 - the runtime `--browser chrome` flag is unaffected, since this skill's `chrome` browser type has no `executablePath` set on a fresh runner anyway and already launches Playwright's bundled chromium build either way (D2B-199). `edge` is excluded from the `ubuntu-24.04-arm` combination entirely, since Microsoft ships no Edge build for Linux ARM64 at all - unlike chrome, there is no substitute install target that would actually exercise edge there. Playwright's own install CLI names the Edge channel `msedge`, not `edge`, so the install step maps this skill's `--browser edge` value to that install target name specifically (D2B-200).
 
 ## Documentation
 

@@ -12,9 +12,12 @@
 # windows-latest (amd64) is the only Windows entry until GitHub offers
 # one.
 #
-# browser is chrome/chromium/firefox/webkit only for now - edge is
-# deferred until D2B-192 ships (it adds the --browser edge support this
-# workflow would otherwise be testing against nothing).
+# browser is chrome/chromium/edge/firefox/webkit (D2B-200: edge added
+# now that D2B-192 shipped --browser edge support). ubuntu-24.04-arm is
+# excluded from the edge combination specifically - unlike chrome (which
+# just needed installing under the "chromium" name instead, see below),
+# Microsoft ships no Edge build for Linux ARM64 at all, so there is no
+# substitute that would actually exercise edge on that platform.
 name: Cross-platform browser launch
 
 on:
@@ -27,7 +30,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
-        browser: [chrome, chromium, firefox, webkit]
+        browser: [chrome, chromium, edge, firefox, webkit]
+        exclude:
+          - os: ubuntu-24.04-arm
+            browser: edge
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +53,28 @@ jobs:
         run: npm install
 
       - name: Install Playwright's ${{ matrix.browser }} browser binary
-        run: npx playwright install --with-deps ${{ matrix.browser }}
+        shell: bash
+        run: |
+          # D2B-199: Playwright's own installer refuses the branded
+          # "chrome" channel entirely on Linux ARM64 ("not supported on
+          # Linux Arm64") - install "chromium" instead there. This
+          # skill's own 'chrome' browser type has no executablePath set
+          # on a fresh runner (no system Chrome/Chromium binary exists
+          # to find), so it already launches Playwright's bundled
+          # chromium build either way - installing under a different
+          # name changes nothing this test actually exercises.
+          # D2B-200: Playwright's install CLI names the Edge channel
+          # "msedge", not "edge" - this skill's own --browser value is
+          # "edge" (matching BrowserPath.pm's channel=>'msedge' launch
+          # option), but the install target name is Playwright's own,
+          # not this skill's.
+          if [ "${{ matrix.os }}" = "ubuntu-24.04-arm" ] && [ "${{ matrix.browser }}" = "chrome" ]; then
+            npx playwright install --with-deps chromium
+          elif [ "${{ matrix.browser }}" = "edge" ]; then
+            npx playwright install --with-deps msedge
+          else
+            npx playwright install --with-deps ${{ matrix.browser }}
+          fi
 
       - name: Compute a portable file:// URL for the static fixture (Windows needs file:///C:/... not file://C:\...)
         id: fixture

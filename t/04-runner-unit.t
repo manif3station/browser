@@ -290,7 +290,7 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         'make_path_if_missing is a no-op success when the target directory already exists'
     );
     ok(
-        Browser::Runner::NodeRuntime::_clear_installed_node_modules(
+        Browser::Runner::NodeRuntime::Install::_clear_installed_node_modules(
             home_root    => $temp_root,
             package_json => $package_json,
         ),
@@ -330,7 +330,7 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     # manifest) in place.
     make_path( File::Spec->catdir( $temp_root, 'node_modules', 'orphaned-removed-dependency' ) );
     ok(
-        Browser::Runner::NodeRuntime::_clear_installed_node_modules(
+        Browser::Runner::NodeRuntime::Install::_clear_installed_node_modules(
             home_root    => $temp_root,
             package_json => $package_json,
         ),
@@ -1711,7 +1711,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     print {$empty_fh} qq|{"name":"empty-browser","version":"0.01.0"}\n|;
     close $empty_fh or die "Unable to close empty package.json: $!";
     is(
-        Browser::Runner::NodeRuntime::_install_node_runtime(
+        Browser::Runner::NodeRuntime::Install::install_node_runtime(
             home_root    => $temp_root,
             package_json => $empty_package_json,
         ),
@@ -1737,7 +1737,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     no warnings 'redefine';
     local *Browser::Runner::NodeRuntime::_run_quiet_command = sub { die "simulated staged npm failure\n" };
     eval {
-        Browser::Runner::NodeRuntime::_install_node_runtime(
+        Browser::Runner::NodeRuntime::Install::install_node_runtime(
             home_root    => $temp_root,
             package_json => $package_json,
         );
@@ -1750,8 +1750,9 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     my $temp_root = tempdir( CLEANUP => 1 );
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = $temp_root;
     local $ENV{HOME};
+    local $ENV{USERPROFILE};
     eval { Browser::Runner::NodeRuntime::_ensure_node_runtime() };
-    like( $@, qr/HOME is required/, '_ensure_node_runtime requires HOME for DD-style package.json installs' );
+    like( $@, qr/HOME .*is required/, '_ensure_node_runtime requires HOME (or USERPROFILE) for DD-style package.json installs' );
 }
 
 {
@@ -2007,9 +2008,12 @@ is( Browser::Runner::_escape_html(q{he said "hi" & 'bye'}), 'he said &quot;hi&qu
     # D2B-170: jquery_path's HOME-required guard fires before it ever
     # checks whether jquery.min.js exists, so it needs its own
     # dedicated test distinct from the missing-jquery-file case above.
-    local $ENV{HOME} = q{};
+    # D2B-199: also clear USERPROFILE, so this proves the "neither set"
+    # case specifically, not just "HOME unset".
+    local $ENV{HOME}        = q{};
+    local $ENV{USERPROFILE} = q{};
     eval { Browser::Runner::_jquery_path() };
-    like( $@, qr/HOME is required for browser skill jQuery injection/, 'jquery_path fails clearly when HOME is not set' );
+    like( $@, qr/HOME \(or USERPROFILE on Windows\) is required for browser skill jQuery injection/, 'jquery_path fails clearly when neither HOME nor USERPROFILE is set' );
 }
 {
     my $temp_root = tempdir( CLEANUP => 1 );

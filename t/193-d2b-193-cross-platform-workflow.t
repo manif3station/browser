@@ -40,10 +40,13 @@ SKIP: {
     ok( ( grep { /macos/i } @os_list ),  'matrix os list includes a macOS runner' );
     ok( ( grep { /windows/i } @os_list ), 'matrix os list includes a Windows runner' );
 
+    # D2B-200: edge shipped in D2B-192 and is now included in the
+    # matrix - the workflow's own header comment previously deferred it
+    # explicitly until D2B-192 shipped.
     is_deeply(
         [ sort @browser_list ],
-        [ sort qw(chrome chromium firefox webkit) ],
-        'matrix browser list covers exactly the currently-supported (non-edge) browser types - edge is deferred until D2B-192 ships'
+        [ sort qw(chrome chromium edge firefox webkit) ],
+        'matrix browser list covers every currently-supported browser type, including edge now that D2B-192 shipped'
     );
 
 }
@@ -57,6 +60,16 @@ like(
     $raw_yaml,
     qr/windows.{0,80}arm64|arm64.{0,80}windows/is,
     'the workflow documents, in a comment, why Windows arm64 is absent from the matrix rather than silently omitting it'
+);
+unlike(
+    $raw_yaml,
+    qr/edge is deferred/i,
+    'the workflow no longer says edge is deferred, now that D2B-192 shipped'
+);
+like(
+    $raw_yaml,
+    qr/arm.{0,80}edge|edge.{0,80}arm/is,
+    'the workflow documents, in a comment, why Linux ARM64 is excluded from the edge combination (Microsoft ships no Edge build for Linux ARM64)'
 );
 
 done_testing();

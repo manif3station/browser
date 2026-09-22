@@ -22,15 +22,18 @@ use Test::More;
 # Docker test container, which this suite's other tests deliberately
 # avoid (every Browser::Runner test mocks playwright_factory instead).
 
-my $node_runtime_source = _slurp('lib/Browser/Runner/NodeRuntime.pm');
+# D2B-198: _install_node_runtime was extracted into
+# Browser::Runner::NodeRuntime::Install as the public install_node_runtime -
+# read from its new home.
+my $install_source = _slurp('lib/Browser/Runner/NodeRuntime/Install.pm');
 
-my ($install_body) = $node_runtime_source =~ /^sub _install_node_runtime \{(.*?)^\}/ms;
-ok( defined $install_body, '_install_node_runtime sub body was found for structural analysis' );
+my ($install_body) = $install_source =~ /^sub install_node_runtime \{(.*?)^\}/ms;
+ok( defined $install_body, 'install_node_runtime sub body was found for structural analysis' );
 
 unlike(
     $install_body,
     qr/\$ENV\{PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD\}\s*=/,
-    '_install_node_runtime no longer assigns PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD within its own sub body, so npm install is free to run Playwright\'s own postinstall browser download'
+    'install_node_runtime no longer assigns PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD within its own sub body, so npm install is free to run Playwright\'s own postinstall browser download'
 );
 
 done_testing();

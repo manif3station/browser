@@ -44,7 +44,7 @@ symlink( File::Spec->catfile( '..', 'pkg-a', 'cli.js' ), $symlink )
 
 make_path( File::Spec->catdir( $source_root, 'pkg-a', 'empty-dir' ) );
 
-Browser::Runner::NodeRuntime::_recursive_copy_dir( $source_root, $target_root );
+Browser::Runner::NodeRuntime::Install::_recursive_copy_dir( $source_root, $target_root );
 
 ok( -f File::Spec->catfile( $target_root, 'pkg-a', 'index.js' ), 'a top-level file is copied into the target' );
 ok( -f File::Spec->catfile( $target_root, 'pkg-b', 'nested', 'deep.js' ), 'a nested file in a subdirectory is copied into the target, subdirectory included' );

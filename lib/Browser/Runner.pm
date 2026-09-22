@@ -287,7 +287,7 @@ sub _maybe_inject_jquery {
 }
 
 sub _jquery_path {
-    my $home_root = $ENV{HOME} || die 'HOME is required for browser skill jQuery injection';
+    my $home_root = Browser::Runner::NodeRuntime::_home_root( context => 'browser skill jQuery injection' );
     my $path = File::Spec->catfile( $home_root, 'node_modules', 'jquery', 'dist', 'jquery.min.js' );
     die "Missing jQuery runtime at $path" if !-f $path;
     return $path;
