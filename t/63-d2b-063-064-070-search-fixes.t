@@ -85,13 +85,13 @@ like( $@, qr/not be negative/, 'search() names the negativity problem clearly' )
 }
 
 # D2B-070: _parse_results should work whether or not the caller-supplied
-# engine hash carries its own parser coderef, and _default_engines'
+# engine hash carries its own parser coderef, and default_engines()'
 # entries should carry one so a new engine's parser lives with its URL
 # builder instead of a separate name-dispatch table.
 {
-    my @default_engines = Browser::Search::_default_engines();
+    my @default_engines = Browser::Search::default_engines();
     for my $engine (@default_engines) {
-        ok( ref $engine->{parser} eq 'CODE', "_default_engines' $engine->{name} entry carries its own parser coderef" );
+        ok( ref $engine->{parser} eq 'CODE', "default_engines()' $engine->{name} entry carries its own parser coderef" );
     }
 }
 
@@ -118,6 +118,25 @@ like( $@, qr/not be negative/, 'search() names the negativity problem clearly' )
         body   => '<li class="b_algo"><h2><a href="https://example.com">Legacy dispatch</a></h2><div class="b_caption"><p>via name, no parser key</p></div></li>',
     );
     is( $results->[0]{title}, 'Legacy dispatch', 'a caller-supplied engine hash with no parser key still resolves via the legacy name-based dispatch (_parse_bing)' );
+}
+
+# D2B-130: a scheduled hunt initially flagged this legacy name-based
+# fallback as unreachable dead code, having traced only search()'s own
+# default engines and Browser::CLI's %by_name map (both of which always
+# carry a parser). Investigation found that conclusion wrong - this test,
+# and the bare-string-engine test in t/22-d2b-026-search-fallback-and-parsing.t,
+# already prove the fallback is genuinely reachable and intentional for any
+# caller of search(engines => [...]) that hand-builds a parser-less engine
+# hash or passes a bare engine-name string. No code change was made. The
+# fixture below is distinctive (unlike an empty body, which would pass
+# even if the duckduckgo dispatch branch were deleted) so this genuinely
+# proves _parse_duckduckgo was reached, not just that the call didn't die.
+{
+    my $results = Browser::Search::_parse_results(
+        engine => 'duckduckgo',
+        body   => '<a class="result__a" href="https://example.com">Bare-string dispatch</a> <a class="result__snippet">via name, no engine hash at all</a>',
+    );
+    is( $results->[0]{title}, 'Bare-string dispatch', 'D2B-130: the by-name fallback for a bare-string engine genuinely dispatches to _parse_duckduckgo, not dead code' );
 }
 
 done_testing();

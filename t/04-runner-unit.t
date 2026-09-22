@@ -9,6 +9,7 @@ use Test::More;
 
 use lib 'lib';
 use Browser::Runner;
+use Browser::Runner::VersionCompare ();
 
 ## Test doubles: fake Playwright/Page/Browser/Request/Response objects
 ## used by the integration-style tests throughout this file.
@@ -238,25 +239,38 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
         ),
         'installed_node_module_version returns undef when the module metadata is absent'
     );
-    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '11.1.0', '^11.0.0' ), 'version_satisfies_spec accepts compatible caret ranges' );
-    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( '12.0.0', '^11.0.0' ), 'version_satisfies_spec rejects incompatible major versions' );
-    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '3.7.1', '3.7.1' ), 'version_satisfies_spec accepts exact matches' );
-    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( '3.7.0', '3.7.1' ), 'version_satisfies_spec rejects exact mismatches' );
-    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3', '*' ), 'version_satisfies_spec accepts wildcard specs' );
-    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3', 'latest' ), 'version_satisfies_spec accepts latest specs' );
-    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( 'not-a-version', '^1.2.3' ), 'version_satisfies_spec rejects non-numeric installed versions' );
-    ok( !Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3-beta.1', '^1.2.3' ), 'version_satisfies_spec (D2B-071) rejects a pre-release install against a caret range targeting the release version' );
-    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.4', '^1.2.3' ), 'version_satisfies_spec still accepts a genuine release version satisfying the range' );
-    ok( Browser::Runner::NodeRuntime::_version_satisfies_spec( '1.2.3-beta.1', '^1.2.3-beta.1' ), 'version_satisfies_spec (D2B-071) accepts a pre-release install when the spec\'s own minimum is that exact same pre-release string' );
-    ok( !defined scalar Browser::Runner::NodeRuntime::_version_parts(undef), 'version_parts returns undef for missing versions' );
-    ok( !defined scalar Browser::Runner::NodeRuntime::_version_parts('not-a-version'), 'version_parts returns undef for non-numeric versions' );
+    ok( Browser::Runner::VersionCompare::version_satisfies_spec( '11.1.0', '^11.0.0' ), 'version_satisfies_spec accepts compatible caret ranges' );
+    ok( !Browser::Runner::VersionCompare::version_satisfies_spec( '12.0.0', '^11.0.0' ), 'version_satisfies_spec rejects incompatible major versions' );
+    ok( Browser::Runner::VersionCompare::version_satisfies_spec( '3.7.1', '3.7.1' ), 'version_satisfies_spec accepts exact matches' );
+    ok( !Browser::Runner::VersionCompare::version_satisfies_spec( '3.7.0', '3.7.1' ), 'version_satisfies_spec rejects exact mismatches' );
+    ok( Browser::Runner::VersionCompare::version_satisfies_spec( '1.2.3', '*' ), 'version_satisfies_spec accepts wildcard specs' );
+    ok( Browser::Runner::VersionCompare::version_satisfies_spec( '1.2.3', 'latest' ), 'version_satisfies_spec accepts latest specs' );
+    ok( !Browser::Runner::VersionCompare::version_satisfies_spec( 'not-a-version', '^1.2.3' ), 'version_satisfies_spec rejects non-numeric installed versions' );
+    ok( !Browser::Runner::VersionCompare::version_satisfies_spec( '1.2.3-beta.1', '^1.2.3' ), 'version_satisfies_spec (D2B-071) rejects a pre-release install against a caret range targeting the release version' );
+    ok( Browser::Runner::VersionCompare::version_satisfies_spec( '1.2.4', '^1.2.3' ), 'version_satisfies_spec still accepts a genuine release version satisfying the range' );
+    ok( Browser::Runner::VersionCompare::version_satisfies_spec( '1.2.3-beta.1', '^1.2.3-beta.1' ), 'version_satisfies_spec (D2B-071) accepts a pre-release install when the spec\'s own minimum is that exact same pre-release string' );
+    ok( !defined scalar Browser::Runner::VersionCompare::version_parts(undef), 'version_parts returns undef for missing versions' );
+    ok( !defined scalar Browser::Runner::VersionCompare::version_parts('not-a-version'), 'version_parts returns undef for non-numeric versions' );
     {
         my $tmp = tempdir( CLEANUP => 1 );
         local $ENV{TMPDIR} = $tmp;
         my $path = Browser::Runner::_screenshot_path();
-        like( $path, qr{\A$tmp/browser-[A-Fa-f0-9]+\.png\z}, 'screenshot_path defaults to TMPDIR with a generated .png filename' );
+        # D2B-134: the random component is now File::Temp's own alphanumeric
+        # charset (not strictly hex, since the path is atomically reserved
+        # by File::Temp rather than hash-derived) - see the D2B-134 block
+        # below for the atomicity assertion itself.
+        like( $path, qr{\A$tmp/browser-\w+\.png\z}, 'screenshot_path defaults to TMPDIR with a generated .png filename' );
+        unlink $path;
         is( Browser::Runner::_screenshot_path('/tmp/example'), '/tmp/example.png', 'screenshot_path appends .png when missing' );
         is( Browser::Runner::_screenshot_path('/tmp/example.png'), '/tmp/example.png', 'screenshot_path keeps an existing .png suffix unchanged' );
+
+        # D2B-134: the default (no --file given) path must be atomically
+        # and exclusively reserved by this process - not merely a computed
+        # string that a race/symlink could pre-empt before Playwright's
+        # screenshot() call ever opens it.
+        my $default_path = Browser::Runner::_screenshot_path();
+        ok( -f $default_path, 'D2B-134: screenshot_path\'s default path already exists as a file at the moment it is returned (atomically reserved, not just computed)' );
+        unlink $default_path;
     }
     is(
         Browser::Runner::NodeRuntime::_make_path_if_missing( File::Spec->catdir( $temp_root, 'node_modules' ) ),
@@ -273,6 +287,50 @@ isa_ok( $runner, 'Browser::Runner', 'constructor returns a Browser::Runner objec
     ok(
         !-e File::Spec->catdir( $temp_root, 'node_modules', 'express' ),
         'clear_installed_node_modules removes one installed dependency tree'
+    );
+
+    for my $module (
+        [ express    => '5.1.2' ],
+        [ jquery     => '3.7.1' ],
+        [ uuid       => '11.1.0' ],
+        [ playwright => '1.55.1' ],
+      )
+    {
+        my ( $name, $version ) = @{$module};
+        make_path( File::Spec->catdir( $temp_root, 'node_modules', $name ) );
+        open my $reinstall_fh, '>', File::Spec->catfile( $temp_root, 'node_modules', $name, 'package.json' )
+          or die "Unable to write temp installed package.json for $name: $!";
+        print {$reinstall_fh} qq|{"name":"$name","version":"$version"}\n|;
+        close $reinstall_fh or die "Unable to close temp installed package.json for $name: $!";
+    }
+
+    # D2B-128 (investigated, accepted as a known limitation - see the
+    # comment on _clear_installed_node_modules itself): a module
+    # directory no longer listed in package.json is NOT cleared, and
+    # this test documents that as the deliberate, safe behavior rather
+    # than a regression to fix - $home_root is the user's real $HOME,
+    # not a directory this skill exclusively owns, so clearing anything
+    # not explicitly named in package.json's own dependency map risks
+    # destroying an unrelated node_modules tree a user keeps under
+    # their own $HOME for something else entirely. This test would
+    # need to change if that trade-off is ever revisited with a
+    # genuinely safe mechanism (e.g. a persisted install-history
+    # manifest) in place.
+    make_path( File::Spec->catdir( $temp_root, 'node_modules', 'orphaned-removed-dependency' ) );
+    ok(
+        Browser::Runner::NodeRuntime::_clear_installed_node_modules(
+            home_root    => $temp_root,
+            package_json => $package_json,
+        ),
+        'clear_installed_node_modules runs successfully with an orphaned module directory present (D2B-128)'
+    );
+    ok(
+        -e File::Spec->catdir( $temp_root, 'node_modules', 'orphaned-removed-dependency' ),
+        'clear_installed_node_modules deliberately leaves a directory not in package.json untouched, since $HOME/node_modules is not exclusively owned by this skill (D2B-128, accepted limitation)'
+    );
+    ok(
+        !-e File::Spec->catdir( $temp_root, 'node_modules', 'express' ),
+        'clear_installed_node_modules still removes current dependency trees as before (D2B-128 regression guard)'
     );
 
     for my $module (
@@ -358,6 +416,7 @@ is( $get_result->{method}, 'GET', 'request returns GET payloads' );
 is( $get_result->{status}, 200, 'GET payload keeps the response status' );
 is( $get_result->{title}, 'Example', 'GET payload keeps the page title' );
 is( $get_result->{content_type}, undef, 'GET payload keeps missing content type when the response did not provide headers' );
+is_deeply( $get_result->{headers}, {}, 'GET payload exposes an empty headers map when the response provided none (D2B-114)' );
 is( $get_result->{body}, '<html><body><h1>Example</h1></body></html>', 'GET payload keeps the page HTML body' );
 is( $get_result->{body_text}, "Example\n", 'GET payload keeps body text' );
 ok( !$get_result->{is_captcha}, 'GET payload does not mark normal pages as captcha pages' );
@@ -379,6 +438,43 @@ is( $get_playwright->{launch_args}{type}, 'chrome', 'normal GET keeps the browse
     my $zero_title_runner = Browser::Runner->new( playwright_factory => sub { return $zero_title_playwright } );
     my $zero_title_result = $zero_title_runner->request( method => 'GET', url => 'https://example.test' );
     is( $zero_title_result->{title}, '0', 'GET preserves a legitimate title of "0" instead of falling back to empty string' );
+}
+
+# D2B-114: GET must expose the full response headers map, not only
+# content-type, so callers can read set-cookie/location/custom headers
+# Playwright already handed back.
+{
+    my $headers_page = FakePage->new(
+        {
+            response => FakeResponse->new(
+                {
+                    status  => 200,
+                    headers => {
+                        'content-type' => 'text/html; charset=utf-8',
+                        'x-test-header' => 'abc123',
+                        'set-cookie'    => 'session=xyz',
+                    },
+                }
+            ),
+            url       => 'https://example.test/headers',
+            title     => 'Headers',
+            content   => '<html><body><h1>Headers</h1></body></html>',
+            body_text => "Headers\n",
+        }
+    );
+    my $headers_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $headers_page } ) } );
+    my $headers_runner = Browser::Runner->new( playwright_factory => sub { return $headers_playwright } );
+    my $headers_result = $headers_runner->request( method => 'GET', url => 'https://example.test/headers' );
+    is( $headers_result->{content_type}, 'text/html; charset=utf-8', 'GET payload still keeps content_type unchanged alongside the new headers key' );
+    is_deeply(
+        $headers_result->{headers},
+        {
+            'content-type'  => 'text/html; charset=utf-8',
+            'x-test-header' => 'abc123',
+            'set-cookie'    => 'session=xyz',
+        },
+        'GET payload exposes the full response headers map, including headers beyond content-type (D2B-114)'
+    );
 }
 
 ## PNG/screenshot request tests.
@@ -409,8 +505,175 @@ my $png_result = $png_runner->request(
 is( $png_result->{method}, 'PNG', 'request returns PNG payloads' );
 is( $png_result->{file}, File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG payload reports the normalized screenshot path' );
 is( $png_page->{screenshot_args}{path}, File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG request sends the normalized path to the screenshot helper' );
+is( $png_result->{content_type}, undef, 'PNG payload keeps content_type undef when the response provided no headers (D2B-115)' );
+is_deeply( $png_result->{headers}, {}, 'PNG payload exposes an empty headers map when the response provided none (D2B-115)' );
 ok( -f File::Spec->catfile( $png_temp, 'shot.png' ), 'PNG request creates the screenshot file' );
 is( $png_playwright->{quit_count}, 1, 'request quits the Playwright handle after PNG' );
+
+# D2B-115: PNG must expose content_type and the full response headers map,
+# matching GET/POST's shape (D2B-114), when the response provides headers.
+{
+    my $png_headers_temp = tempdir( CLEANUP => 1 );
+    my $png_headers_page = FakePage->new(
+        {
+            response => FakeResponse->new(
+                {
+                    status  => 200,
+                    headers => {
+                        'content-type'  => 'image/png',
+                        'x-test-header' => 'ghi789',
+                    },
+                }
+            ),
+            url   => 'https://example.test/final',
+            title => 'Headers Screenshot',
+        }
+    );
+    my $png_headers_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $png_headers_page } ) } );
+    my $png_headers_runner = Browser::Runner->new( playwright_factory => sub { return $png_headers_playwright } );
+    my $png_headers_result = $png_headers_runner->request(
+        method => 'PNG',
+        url    => 'https://example.test',
+        file   => File::Spec->catfile( $png_headers_temp, 'shot' ),
+    );
+    is( $png_headers_result->{content_type}, 'image/png', 'PNG payload keeps content_type populated when the response provides headers (D2B-115)' );
+    is_deeply(
+        $png_headers_result->{headers},
+        {
+            'content-type'  => 'image/png',
+            'x-test-header' => 'ghi789',
+        },
+        'PNG payload exposes the full response headers map, including headers beyond content-type (D2B-115)'
+    );
+}
+
+# D2B-131: browser.png must actually run --script (and inject jQuery for
+# --jquery) before taking the screenshot, mirroring browser.get/browser.post
+# via _interact_and_run_script, instead of silently ignoring both flags.
+{
+    my $png_script_temp = tempdir( CLEANUP => 1 );
+    my $png_script_page = FakePage->new(
+        {
+            response        => FakeResponse->new( { status => 200 } ),
+            url             => 'https://example.test/final',
+            title           => 'Script Screenshot',
+            evaluate_return => 'script ran',
+        }
+    );
+    my $png_script_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $png_script_page } ) } );
+    my $png_script_runner = Browser::Runner->new( playwright_factory => sub { return $png_script_playwright } );
+    my $png_script_result = $png_script_runner->request(
+        method => 'PNG',
+        url    => 'https://example.test',
+        file   => File::Spec->catfile( $png_script_temp, 'shot' ),
+        script => 'return 1',
+    );
+    is_deeply( $png_script_page->{evaluations}, ['return 1'], 'D2B-131: browser.png actually runs --script against the page before the screenshot' );
+    is( $png_script_result->{script_result}, 'script ran', 'D2B-131: browser.png includes script_result in its response when --script is given, matching browser.get' );
+}
+
+{
+    my $png_jquery_temp = tempdir( CLEANUP => 1 );
+    my $png_jquery_home = tempdir( CLEANUP => 1 );
+    make_path( File::Spec->catdir( $png_jquery_home, 'node_modules', 'jquery', 'dist' ) );
+    open my $png_jquery_fh, '>', File::Spec->catfile( $png_jquery_home, 'node_modules', 'jquery', 'dist', 'jquery.min.js' )
+      or die "Unable to write temp jquery runtime: $!";
+    print {$png_jquery_fh} "window.\$ = function(){};\n";
+    close $png_jquery_fh or die "Unable to close temp jquery runtime: $!";
+    local $ENV{HOME} = $png_jquery_home;
+
+    my $png_jquery_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 200 } ),
+            url      => 'https://example.test/final',
+            title    => 'jQuery Screenshot',
+        }
+    );
+    my $png_jquery_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $png_jquery_page } ) } );
+    my $png_jquery_runner = Browser::Runner->new( playwright_factory => sub { return $png_jquery_playwright } );
+    $png_jquery_runner->request(
+        method => 'PNG',
+        url    => 'https://example.test',
+        file   => File::Spec->catfile( $png_jquery_temp, 'shot' ),
+        jquery => 1,
+    );
+    is(
+        $png_jquery_page->{script_tags}[0]{path},
+        File::Spec->catfile( $png_jquery_home, 'node_modules', 'jquery', 'dist', 'jquery.min.js' ),
+        'D2B-131: browser.png actually injects jQuery via --jquery before the screenshot'
+    );
+}
+
+# D2B-135: a failure after the default screenshot path is reserved (D2B-134)
+# must not leave the empty placeholder file behind under tmpdir.
+{
+    my $fail_temp = tempdir( CLEANUP => 1 );
+    local $ENV{TMPDIR} = $fail_temp;
+    my $fail_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 200 } ),
+            url      => 'https://example.test/final',
+            title    => 'Fail Screenshot',
+        }
+    );
+    my $fail_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $fail_page } ) } );
+    my $fail_runner = Browser::Runner->new( playwright_factory => sub { return $fail_playwright } );
+    {
+        no warnings 'redefine';
+        local *FakePage::evaluate = sub { die "Simulated script failure (D2B-135)\n" };
+        eval {
+            $fail_runner->request(
+                method => 'PNG',
+                url    => 'https://example.test',
+                script => 'return 1',
+            );
+        };
+        like( $@, qr/Simulated script failure/, 'D2B-135 setup: the script genuinely fails after the placeholder is reserved' );
+    }
+    opendir my $dh, $fail_temp or die "Unable to open $fail_temp: $!";
+    my @leftover = grep { /^browser-.*\.png\z/ } readdir $dh;
+    closedir $dh;
+    is_deeply( \@leftover, [], 'D2B-135: a failure after path reservation leaves no orphaned placeholder file behind' );
+}
+
+# D2B-135: an existing user-supplied --file must never be deleted by this
+# cleanup, even when a later step fails - only the D2B-134-reserved default
+# placeholder is ever cleaned up.
+{
+    my $file_temp      = tempdir( CLEANUP => 1 );
+    my $explicit_file  = File::Spec->catfile( $file_temp, 'my-shot.png' );
+    open my $seed_fh, '>', $explicit_file or die "Unable to seed $explicit_file: $!";
+    print {$seed_fh} "pre-existing screenshot content\n";
+    close $seed_fh or die "Unable to close $explicit_file: $!";
+
+    my $file_page = FakePage->new(
+        {
+            response => FakeResponse->new( { status => 200 } ),
+            url      => 'https://example.test/final',
+            title    => 'Explicit File Screenshot',
+        }
+    );
+    my $file_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $file_page } ) } );
+    my $file_runner = Browser::Runner->new( playwright_factory => sub { return $file_playwright } );
+    {
+        no warnings 'redefine';
+        local *FakePage::evaluate = sub { die "Simulated script failure (D2B-135)\n" };
+        eval {
+            $file_runner->request(
+                method => 'PNG',
+                url    => 'https://example.test',
+                file   => $explicit_file,
+                script => 'return 1',
+            );
+        };
+        like( $@, qr/Simulated script failure/, 'D2B-135 setup: the script genuinely fails for the explicit --file case too' );
+    }
+    ok( -e $explicit_file, 'D2B-135: an existing user-supplied --file is left untouched (not deleted) when a later step fails' );
+    open my $check_fh, '<', $explicit_file or die "Unable to read $explicit_file: $!";
+    my $content = <$check_fh>;
+    close $check_fh;
+    is( $content, "pre-existing screenshot content\n", 'D2B-135: the pre-existing --file content is unchanged after a failure' );
+}
 
 # D2B-057: browser.png must not crash if page->title() throws after the
 # screenshot has already been written to disk successfully.
@@ -709,6 +972,7 @@ my $post_result = $post_runner->request(
 is( $post_result->{method}, 'POST', 'request returns POST payloads' );
 is( $post_result->{status}, 201, 'POST payload keeps the response status' );
 is( $post_result->{content_type}, 'text/plain', 'POST payload keeps the response content type' );
+is_deeply( $post_result->{headers}, { 'content-type' => 'text/plain' }, 'POST payload exposes the full response headers map (D2B-114)' );
 is( $post_result->{body}, 'name=dashboard', 'POST payload keeps the response body' );
 is( $post_result->{body_text}, "Posted\nname=dashboard\n", 'POST payload keeps body text' );
 ok( !$post_result->{is_captcha}, 'POST payload does not mark normal pages as captcha pages' );
@@ -815,6 +1079,41 @@ my $controller_post_result = $controller_post_runner->request(
 is( $controller_post_result->{final_url}, 'https://example.test/dashboard', 'POST controller mode updates the final URL from the current page state' );
 is( $controller_post_result->{script_result}{method}, 'POST', 'POST controller mode exposes the request method to the Perl script' );
 is( $controller_post_result->{script_result}{requested}, 'https://example.test/post', 'POST controller mode exposes the requested URL to the Perl script' );
+
+# D2B-114: POST must expose the full response headers map, including
+# headers beyond content-type.
+{
+    my $post_headers_page = FakePage->new(
+        {
+            request => FakeRequest->new(
+                {
+                    calls            => [],
+                    response_headers => {
+                        'content-type'  => 'application/json',
+                        'x-test-header' => 'def456',
+                    },
+                }
+            ),
+            title     => 'Posted',
+            body_text => "posted\n",
+        }
+    );
+    my $post_headers_playwright = FakePlaywright->new( { browser => FakeBrowser->new( { page => $post_headers_page } ) } );
+    my $post_headers_runner = Browser::Runner->new( playwright_factory => sub { return $post_headers_playwright } );
+    my $post_headers_result = $post_headers_runner->request(
+        method => 'POST',
+        url    => 'https://example.test/api',
+        data   => '{}',
+    );
+    is_deeply(
+        $post_headers_result->{headers},
+        {
+            'content-type'  => 'application/json',
+            'x-test-header' => 'def456',
+        },
+        'POST payload exposes headers beyond content-type (D2B-114)'
+    );
+}
 
 ## Error-handling tests: browser errors are rethrown/cleaned up
 ## correctly, and unsupported HTTP methods are rejected.
@@ -987,6 +1286,20 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     chmod 0755, $good or die "Unable to chmod configured chrome wrapper: $!";
     local $ENV{CHROMIUM_BIN} = $good;
     is( Browser::Runner::BrowserPath::_validated_browser_path(), $good, 'validated_browser_path accepts a configured absolute browser path that passes the usability check' );
+
+    # D2B-118: a usable, accepted CHROMIUM_BIN must not warn - only rejection should.
+    my $usable_warning = q{};
+    local $SIG{__WARN__} = sub { $usable_warning .= $_[0] };
+    Browser::Runner::BrowserPath::_validated_browser_path();
+    is( $usable_warning, q{}, 'validated_browser_path emits no warning when CHROMIUM_BIN is usable (D2B-118)' );
+}
+
+{
+    local $ENV{CHROMIUM_BIN};
+    my $unset_warning = q{};
+    local $SIG{__WARN__} = sub { $unset_warning .= $_[0] };
+    Browser::Runner::BrowserPath::_validated_browser_path();
+    is( $unset_warning, q{}, 'validated_browser_path emits no warning when CHROMIUM_BIN is unset - normal auto-detection, not a misconfiguration (D2B-118)' );
 }
 
 {
@@ -998,6 +1311,14 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     chmod 0755, $broken or die "Unable to chmod broken configured chrome wrapper: $!";
     local $ENV{CHROMIUM_BIN} = $broken;
     ok( !defined Browser::Runner::BrowserPath::_validated_browser_path(), 'validated_browser_path rejects a configured browser path that fails the usability check' );
+
+    # D2B-118: a rejected CHROMIUM_BIN must warn to STDERR, naming the path,
+    # so the silent fallback becomes visible instead of invisible.
+    my $rejected_warning = q{};
+    local $SIG{__WARN__} = sub { $rejected_warning .= $_[0] };
+    Browser::Runner::BrowserPath::_validated_browser_path();
+    like( $rejected_warning, qr/\Q$broken\E/, 'validated_browser_path warns naming the rejected CHROMIUM_BIN path (D2B-118)' );
+    like( $rejected_warning, qr/CHROMIUM_BIN/, 'validated_browser_path warning mentions CHROMIUM_BIN so the cause is clear (D2B-118)' );
 }
 
 {
@@ -1008,11 +1329,66 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     like( join( "\n", @candidates ), qr/\Q$temp_root\E\/Applications\/Chromium\.app\/Contents\/MacOS\/Chromium/, 'browser_candidates includes home-local macOS Chromium app paths for validation' );
 }
 
-## Browser::Runner::NodeRuntime::_skill_root unit tests.
+# D2B-126 (Codex review round 3): the symmetric HOME-unset case for the
+# pre-existing macOS $HOME-relative candidates - an unset HOME must skip
+# those two candidates entirely rather than producing a nonsensical
+# relative path, the same fix just applied to the new Windows loop.
+{
+    local $ENV{HOME};
+    my @candidates = Browser::Runner::BrowserPath::_browser_candidates();
+    like( join( "\n", @candidates ), qr{^/Applications/Google Chrome\.app/Contents/MacOS/Google Chrome$}m, 'browser_candidates still includes the absolute macOS Chrome path when HOME is unset' );
+    unlike( join( "\n", @candidates ), qr{^Applications/}m, 'browser_candidates does not produce a relative HOME-based path when HOME is unset (D2B-126)' );
+}
+
+# D2B-126: Windows must get an absolute-path fallback safety net too,
+# the same way macOS already does, since Chrome/Chromium's Windows
+# installers typically do not add themselves to PATH.
+{
+    local $^O = 'MSWin32';
+    local $ENV{PROGRAMFILES} = 'C:\Program Files';
+    local $ENV{'PROGRAMFILES(X86)'} = 'C:\Program Files (x86)';
+    local $ENV{LOCALAPPDATA} = 'C:\Users\tester\AppData\Local';
+    my @candidates = Browser::Runner::BrowserPath::_browser_candidates();
+    # File::Spec's separator is fixed by which OS-specific variant was
+    # loaded at process start (File::Spec::Unix here, since this test
+    # runs on Linux even with $^O overridden) - a real Windows host
+    # loads File::Spec::Win32 instead and gets real backslashes, so the
+    # match below is separator-agnostic ([\\\/]) rather than asserting
+    # one specific separator this test environment can't produce.
+    like( join( "\n", @candidates ), qr/Program Files[\\\/]Google[\\\/]Chrome[\\\/]Application[\\\/]chrome\.exe/, 'browser_candidates includes a Program Files Chrome path on Windows (D2B-126)' );
+    like( join( "\n", @candidates ), qr/Program Files \(x86\)[\\\/]Google[\\\/]Chrome[\\\/]Application[\\\/]chrome\.exe/, 'browser_candidates includes a Program Files (x86) Chrome path on Windows for 32-bit installs (D2B-126)' );
+    like( join( "\n", @candidates ), qr/AppData[\\\/]Local[\\\/]Google[\\\/]Chrome[\\\/]Application[\\\/]chrome\.exe/, 'browser_candidates includes a LOCALAPPDATA Chrome path on Windows (D2B-126)' );
+    unlike( join( "\n", @candidates ), qr/Applications\/Google Chrome\.app/, 'browser_candidates does not include macOS candidates on Windows (D2B-126)' );
+}
+
+# D2B-126 (Codex review round 2): if PROGRAMFILES/PROGRAMFILES(X86)/
+# LOCALAPPDATA is unset, no candidate should be constructed for it at
+# all - a naive File::Spec->catfile('', ...) fallback would otherwise
+# silently produce a nonsensical relative path like
+# "Google/Chrome/Application/chrome.exe" instead of being skipped.
+{
+    local $^O = 'MSWin32';
+    local $ENV{PROGRAMFILES};
+    local $ENV{'PROGRAMFILES(X86)'};
+    local $ENV{LOCALAPPDATA};
+    my @candidates = Browser::Runner::BrowserPath::_browser_candidates();
+    is_deeply( \@candidates, [], 'browser_candidates produces no candidates on Windows when every root env var is unset, rather than nonsensical relative paths (D2B-126)' );
+}
+
+# D2B-126: the new Windows candidates must never leak into non-Windows
+# platforms - the existing macOS-only test above already covers this
+# implicitly (default $^O on this CI), but assert it explicitly too.
+{
+    local $^O = 'linux';
+    my @candidates = Browser::Runner::BrowserPath::_browser_candidates();
+    unlike( join( "\n", @candidates ), qr/Program Files|AppData\\Local/, 'browser_candidates never includes Windows candidates on a non-Windows platform (D2B-126)' );
+}
+
+## Browser::Runner::NodeRuntime::skill_root unit tests.
 
 {
     local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} = '/tmp/browser-skill-root';
-    is( Browser::Runner::NodeRuntime::_skill_root(), '/tmp/browser-skill-root', 'skill root prefers the DD skill root environment variable' );
+    is( Browser::Runner::NodeRuntime::skill_root(), '/tmp/browser-skill-root', 'skill root prefers the DD skill root environment variable' );
 }
 
 {
@@ -1025,7 +1401,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     close $marker_fh;
     my $cwd = Cwd::getcwd();
     chdir $temp_root or die "Unable to chdir to temp root: $!";
-    is( Browser::Runner::NodeRuntime::_skill_root(), $temp_root, 'skill root falls back to the current skill repo during local development' );
+    is( Browser::Runner::NodeRuntime::skill_root(), $temp_root, 'skill root falls back to the current skill repo during local development' );
     chdir $cwd or die "Unable to restore cwd: $!";
 }
 
@@ -1034,7 +1410,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     my $temp_root = tempdir( CLEANUP => 1 );
     my $cwd = Cwd::getcwd();
     chdir $temp_root or die "Unable to chdir to fallback temp root: $!";
-    like( Browser::Runner::NodeRuntime::_skill_root(), qr/(?:\.|skills\/browser)\z/, 'skill root can fall back to the module path' );
+    like( Browser::Runner::NodeRuntime::skill_root(), qr/(?:\.|skills\/browser)\z/, 'skill root can fall back to the module path' );
     chdir $cwd or die "Unable to restore cwd after module-path fallback test: $!";
 }
 
@@ -1215,6 +1591,163 @@ like( $@, qr/Command failed/, '_run_quiet_command reports failed commands' );
 my $quiet_command_exit = Browser::Runner::NodeRuntime::_run_quiet_command('true');
 is( $quiet_command_exit, 0, '_run_quiet_command returns zero for a successful command' );
 
+# D2B-119: a failed quiet command must surface its real exit code and the
+# stdout/stderr it captured, instead of just the bare command line. The
+# markers below are only known at the CHILD's runtime ($$, its own pid) so
+# they cannot appear in @command's literal source text and trivially
+# satisfy these checks without a real fix - a match here can only come
+# from genuinely captured output.
+{
+    eval {
+        Browser::Runner::NodeRuntime::_run_quiet_command(
+            $^X, '-e',
+            'print STDOUT "captured-out-" . $$ . "\n"; print STDERR "captured-err-" . $$ . "\n"; exit(7);'
+        );
+    };
+    like( $@, qr/exit code:? ?7\b/i, '_run_quiet_command failure message names the real exit code (D2B-119)' );
+    like( $@, qr/captured-out-\d+/, '_run_quiet_command failure message includes the captured stdout (D2B-119)' );
+    like( $@, qr/captured-err-\d+/, '_run_quiet_command failure message includes the captured stderr (D2B-119)' );
+}
+
+# D2B-119: a successful quiet command must still leave no temp files behind.
+{
+    my $tmp_before = tempdir( CLEANUP => 1 );
+    local $ENV{TMPDIR} = $tmp_before;
+    Browser::Runner::NodeRuntime::_run_quiet_command('true');
+    opendir my $dh, $tmp_before or die "Unable to open $tmp_before: $!";
+    my @leftover = grep { !/^\.\.?$/ } readdir $dh;
+    closedir $dh;
+    is_deeply( \@leftover, [], '_run_quiet_command leaves no leftover temp files after a successful run (D2B-119)' );
+}
+
+# D2B-129: if the STDERR redirect fails after STDOUT was already redirected,
+# the real STDOUT handle must still be restored rather than left permanently
+# pointed at a soon-to-be-deleted tempfile. This has to run in a child
+# process, since reproducing the bug means deliberately breaking the
+# process's own STDOUT/STDERR - doing that in-process would corrupt this
+# test file's own TAP output for every test that runs after it.
+{
+    my $lib_dir     = File::Spec->rel2abs('lib');
+    my $marker_path = File::Spec->catfile( tempdir( CLEANUP => 1 ), 'd2b129-after-marker.txt' );
+    my $child_script = <<'PERL';
+use strict;
+use warnings;
+use File::Temp ();
+use lib $ENV{D2B129_LIB_DIR};
+use Browser::Runner::NodeRuntime;
+
+my $calls = 0;
+{
+    no warnings 'redefine';
+    *Browser::Runner::NodeRuntime::tempfile = sub {
+        $calls++;
+        my ( $fh, $path ) = File::Temp::tempfile( UNLINK => 1 );
+        close $fh if $calls == 2;    # force the STDERR redirect's open() to fail
+        return ( $fh, $path );
+    };
+}
+
+eval { Browser::Runner::NodeRuntime::_run_quiet_command('true') };
+open my $marker_fh, '>', $ENV{D2B129_MARKER_PATH} or die "Unable to open marker file: $!";
+print {$marker_fh} 'redirect-failed=' . ( $@ =~ /Unable to redirect STDERR/ ? 1 : 0 ) . "\n";
+close $marker_fh;
+print STDOUT "MARKER-ON-REAL-STDOUT\n";
+PERL
+
+    my $work_dir  = tempdir( CLEANUP => 1 );
+    my $script_path = File::Spec->catfile( $work_dir, 'd2b129-child.pl' );
+    my $child_out    = File::Spec->catfile( $work_dir, 'child-stdout.txt' );
+    open my $script_fh, '>', $script_path or die "Unable to write child script: $!";
+    print {$script_fh} $child_script;
+    close $script_fh;
+
+    local $ENV{D2B129_LIB_DIR}     = $lib_dir;
+    local $ENV{D2B129_MARKER_PATH} = $marker_path;
+    # Propagate coverage instrumentation into the child process (when this
+    # test itself is running under Devel::Cover) so the redirect-failure
+    # branch inside _run_quiet_command that only executes in that child is
+    # actually counted - otherwise coverage always sees it as unreached,
+    # even though this test genuinely exercises it.
+    local $ENV{PERL5OPT} = $INC{'Devel/Cover.pm'}
+      ? join( q{ }, '-MDevel::Cover', ( $ENV{PERL5OPT} || () ) )
+      : ( $ENV{PERL5OPT} || q{} );
+    system("$^X \Q$script_path\E > \Q$child_out\E 2>&1");
+
+    open my $marker_fh, '<', $marker_path or die "Unable to read marker file: $!";
+    my $marker_contents = do { local $/; <$marker_fh> };
+    close $marker_fh;
+    like( $marker_contents, qr/redirect-failed=1/, 'D2B-129 test setup genuinely forces the STDERR redirect to fail' );
+
+    open my $child_out_fh, '<', $child_out or die "Unable to read captured child stdout: $!";
+    my $child_out_contents = do { local $/; <$child_out_fh> };
+    close $child_out_fh;
+    like(
+        $child_out_contents,
+        qr/MARKER-ON-REAL-STDOUT/,
+        'D2B-129: after a failed STDERR redirect, the real STDOUT is still restored so later output reaches it'
+    );
+}
+
+# D2B-129 (review follow-up): the STDOUT and STDERR restore attempts must
+# be independent of each other - one failing must not prevent the other
+# from being attempted. This overrides _restore_std_handle to die for
+# STDOUT without ever performing the real restore open, so - like the
+# STDERR-redirect-failure test above - it has to run in a child process:
+# doing this in the main test process would leave the real STDOUT/STDERR
+# pointed at deleted tempfiles for every test that runs afterward.
+{
+    my $lib_dir      = File::Spec->rel2abs('lib');
+    my $marker_path2 = File::Spec->catfile( tempdir( CLEANUP => 1 ), 'd2b129-restore-marker.txt' );
+    my $child_script2 = <<'CHILD_PERL2';
+use strict;
+use warnings;
+use lib $ENV{D2B129_LIB_DIR};
+use Browser::Runner::NodeRuntime;
+
+my @seen_labels;
+{
+    no warnings 'redefine';
+    *Browser::Runner::NodeRuntime::_restore_std_handle = sub {
+        my ( undef, undef, $label ) = @_;
+        push @seen_labels, $label;
+        die "Simulated restore failure for $label\n" if $label eq 'STDOUT';
+        return 1;
+    };
+}
+
+eval { Browser::Runner::NodeRuntime::_run_quiet_command('true') };
+my $error = $@;
+open my $marker_fh, '>', $ENV{D2B129_MARKER_PATH} or die "Unable to open marker file: $!";
+print {$marker_fh} 'labels=' . join( q{,}, @seen_labels ) . "\n";
+print {$marker_fh} 'error=' . ( $error =~ /Simulated restore failure for STDOUT/ ? 1 : 0 ) . "\n";
+close $marker_fh;
+CHILD_PERL2
+
+    my $work_dir2    = tempdir( CLEANUP => 1 );
+    my $script_path2 = File::Spec->catfile( $work_dir2, 'd2b129-restore-child.pl' );
+    open my $script_fh2, '>', $script_path2 or die "Unable to write child script: $!";
+    print {$script_fh2} $child_script2;
+    close $script_fh2;
+
+    local $ENV{D2B129_LIB_DIR}     = $lib_dir;
+    local $ENV{D2B129_MARKER_PATH} = $marker_path2;
+    local $ENV{PERL5OPT} = $INC{'Devel/Cover.pm'}
+      ? join( q{ }, '-MDevel::Cover', ( $ENV{PERL5OPT} || () ) )
+      : ( $ENV{PERL5OPT} || q{} );
+    system("$^X \Q$script_path2\E > /dev/null 2>&1");
+
+    open my $marker_fh2, '<', $marker_path2 or die "Unable to read restore marker file: $!";
+    my $marker_contents2 = do { local $/; <$marker_fh2> };
+    close $marker_fh2;
+
+    like(
+        $marker_contents2,
+        qr/labels=STDOUT,STDERR/,
+        'D2B-129: the STDERR restore is still attempted even though the STDOUT restore failed first'
+    );
+    like( $marker_contents2, qr/error=1/, 'D2B-129: a restore failure is surfaced to the caller' );
+}
+
 ## _new_playwright unit test.
 
 {
@@ -1238,6 +1771,13 @@ is( Browser::Runner::_page_text( FakePage->new( { body_text => "Hello\n" } ) ), 
 is_deeply( Browser::Runner::_goto_options(), { waitUntil => 'networkidle' }, 'goto_options defaults to networkidle for non-interactive runs' );
 is_deeply( Browser::Runner::_goto_options( interactive => 1 ), { waitUntil => 'load', timeout => 0 }, 'goto_options defaults interactive runs to load with no timeout' );
 is_deeply( Browser::Runner::_goto_options( interactive => 1, timeout_ms => 120000 ), { waitUntil => 'load', timeout => 120000 }, 'goto_options keeps explicit timeout overrides' );
+# D2B-172: an explicit --timeout-ms 0 takes the "if (defined $args{timeout_ms})"
+# branch (timeout => 0), distinct from line 1772's interactive-default
+# "elsif ($args{interactive})" branch, which also produces timeout => 0
+# but via no timeout_ms being given at all. Playwright treats timeout: 0
+# as "disabled", not "instant" - documented for browser.search in
+# SKILLS.md, now also documented for get/post/png (this ticket).
+is_deeply( Browser::Runner::_goto_options( timeout_ms => 0 ), { waitUntil => 'networkidle', timeout => 0 }, 'goto_options honors an explicit zero timeout, distinct from the interactive-default zero-timeout path' );
 is_deeply( Browser::Runner::_goto_options( wait_until => 'load' ), { waitUntil => 'load' }, 'goto_options accepts explicit load mode' );
 is_deeply( Browser::Runner::_goto_options( wait_until => 'domcontentloaded' ), { waitUntil => 'domcontentloaded' }, 'goto_options accepts explicit domcontentloaded mode' );
 eval { Browser::Runner::_goto_options( wait_until => 'invalid' ) };
@@ -1285,6 +1825,14 @@ is( Browser::Runner::_escape_html(q{he said "hi" & 'bye'}), 'he said &quot;hi&qu
     local $ENV{HOME} = $temp_root;
     eval { Browser::Runner::_jquery_path() };
     like( $@, qr/Missing jQuery runtime/, 'jquery_path fails clearly when jquery is not installed' );
+}
+{
+    # D2B-170: jquery_path's HOME-required guard fires before it ever
+    # checks whether jquery.min.js exists, so it needs its own
+    # dedicated test distinct from the missing-jquery-file case above.
+    local $ENV{HOME} = q{};
+    eval { Browser::Runner::_jquery_path() };
+    like( $@, qr/HOME is required for browser skill jQuery injection/, 'jquery_path fails clearly when HOME is not set' );
 }
 {
     my $temp_root = tempdir( CLEANUP => 1 );

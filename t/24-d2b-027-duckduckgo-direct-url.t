@@ -13,7 +13,7 @@ use Browser::Search;
 # redirect transparently, so this was never a functional bug, just an
 # avoidable extra HTTP round trip on every duckduckgo search.
 
-my %by_name = map { $_->{name} => $_ } Browser::Search::_default_engines();
+my %by_name = map { $_->{name} => $_ } Browser::Search::default_engines();
 my $url = $by_name{duckduckgo}{url}->('test query');
 
 like( $url, qr{\Ahttps://html\.duckduckgo\.com/}, 'the default duckduckgo engine URL goes straight to html.duckduckgo.com, skipping the redirect hop' );

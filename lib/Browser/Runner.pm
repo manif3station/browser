@@ -3,11 +3,11 @@ package Browser::Runner;
 use strict;
 use warnings;
 
-use Digest::SHA qw(sha256_hex);
 use Encode qw(decode_utf8);
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use File::Spec;
+use File::Temp qw(tempfile);
 use JSON::PP qw(encode_json);
 
 use Browser::Runner::BrowserPath ();
@@ -63,9 +63,18 @@ sub _screenshot_path {
         return $requested . '.png';
     }
 
-    my $tmp = File::Spec->tmpdir();
-    my $random = substr sha256_hex( join q{:}, time(), $$, rand(), {} ), 0, 16;
-    return File::Spec->catfile( $tmp, "browser-$random.png" );
+    # D2B-134: reserve the default path atomically and exclusively via
+    # File::Temp (O_CREAT|O_EXCL under the hood), instead of merely
+    # computing a hash-derived path string for Playwright to write to -
+    # closing the window where another process/symlink could pre-empt it.
+    my ( $fh, $path ) = tempfile(
+        'browser-' . ( 'X' x 16 ),
+        SUFFIX => '.png',
+        DIR    => File::Spec->tmpdir(),
+        UNLINK => 0,
+    );
+    close $fh or die "Unable to close reserved screenshot path $path: $!";
+    return $path;
 }
 
 sub _defined_or_empty {
@@ -88,6 +97,7 @@ sub _run_get {
         status        => $response ? $response->status() : undef,
         title         => $title,
         content_type  => $headers->{'content-type'},
+        headers       => $headers,
         body          => $body,
         body_text     => $body_text,
         is_captcha    => _is_captcha_page(
@@ -188,6 +198,7 @@ sub _run_post {
         final_url     => $final_url,
         status        => $status,
         content_type  => $headers->{'content-type'},
+        headers       => $headers,
         body          => $body,
         body_text     => _page_text($page),
     };
@@ -216,33 +227,66 @@ sub _interact_and_run_script {
 sub _run_png {
     my ( $page, %args ) = @_;
     my $response = $page->goto( $args{url}, _goto_options(%args) );
-    _await_user(%args) if $args{interactive};
 
+    # D2B-131 (review follow-up): validate --file before running the
+    # script/jquery below, so a bad --file fails fast without ever
+    # running a script with real side effects on the page.
+    my $owns_file = !( defined $args{file} && $args{file} ne q{} );
     my $file = _screenshot_path( $args{file} );
-    my $dir = dirname($file);
-    make_path($dir) if defined $dir && $dir ne q{} && !-d $dir;
 
-    $page->screenshot(
-        {
-            path     => $file,
-            fullPage => JSON::PP::true,
-        }
-    );
+    my $script_result;
+    my $ok = eval {
+        # D2B-131 (review follow-up): validate --file before running the
+        # script/jquery below, so a bad --file fails fast without ever
+        # running a script with real side effects on the page. D2B-135
+        # (review follow-up): this validation and make_path also run
+        # inside the protected block, so a failure here is cleaned up
+        # the same way a later script/screenshot failure is.
+        die "--file points at an existing directory: $file" if -d $file;
+        my $dir = dirname($file);
+        make_path($dir) if defined $dir && $dir ne q{} && !-d $dir;
 
-    return {
+        # D2B-131: run --script/--jquery before the screenshot, mirroring
+        # _run_get/_run_post, instead of silently ignoring both flags.
+        $script_result = _interact_and_run_script( $page, response => $response, %args );
+
+        $page->screenshot(
+            {
+                path     => $file,
+                fullPage => JSON::PP::true,
+            }
+        );
+        1;
+    };
+    if ( !$ok ) {
+        my $error = $@;
+        # D2B-135: only clean up the placeholder this call itself reserved
+        # (D2B-134) - a user-supplied --file is never deleted by this skill.
+        unlink $file if $owns_file;
+        die $error;
+    }
+
+    my $headers = $response ? ( $response->headers() || {} ) : {};
+
+    my $result = {
         method        => 'PNG',
         requested_url => $args{url},
         final_url     => $page->url(),
         status        => $response ? $response->status() : undef,
         title         => _defined_or_empty( eval { $page->title() } ),
+        content_type  => $headers->{'content-type'},
+        headers       => $headers,
         file          => $file,
     };
+    $result->{script_result} = $script_result if defined $args{script};
+    return $result;
 }
 
 sub _run_script {
     my ( $page, %args ) = @_;
     return if !defined $args{script};
     return _run_controller_script( $page, %args ) if $args{controller};
+    die "--script must not be empty" if $args{script} eq q{};
     return $page->evaluate( $args{script} );
 }
 
@@ -331,6 +375,14 @@ sub _is_captcha_page {
     return 1 if $title =~ /recaptcha/;
     return 1 if $title =~ /unusual traffic/;
     return 1 if $title =~ /verify you are human/;
+
+    # D2B-173: Cloudflare's own interstitial/block pages use neither
+    # the word "captcha" nor any recognized widget markup, so they
+    # need their own title checks - "Just a moment..." is its
+    # JS-challenge interstitial, "Attention Required! | Cloudflare"
+    # is its block page for flagged traffic.
+    return 1 if $title =~ /just a moment/;
+    return 1 if $title =~ /attention required/;
     return 0;
 }
 

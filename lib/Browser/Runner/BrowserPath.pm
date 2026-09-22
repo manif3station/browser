@@ -11,7 +11,7 @@ my @SUPPORTED_BROWSER_TYPES = qw(chrome chromium firefox webkit);
 
 sub _launch_options {
     my (%args) = @_;
-    my $requested = $args{browser} || 'chrome';
+    my $requested = defined $args{browser} ? $args{browser} : 'chrome';
     die "Unsupported browser type: $requested (expected one of: @SUPPORTED_BROWSER_TYPES)"
       if !grep { $_ eq $requested } @SUPPORTED_BROWSER_TYPES;
     my $type = $requested eq 'chromium' ? 'chrome' : $requested;
@@ -31,6 +31,7 @@ sub _validated_browser_path {
     my $configured = $ENV{CHROMIUM_BIN};
     if ( defined $configured && $configured ne q{} ) {
         return $configured if _browser_path_is_usable($configured);
+        warn "CHROMIUM_BIN=$configured is not a usable browser executable - falling back to Playwright's own bundled browser\n";
         return;
     }
 
@@ -47,6 +48,15 @@ sub _default_chromium_bin {
 
 sub _browser_candidates {
     my @candidates;
+
+    # D2B-162: %seen's dedup-skip branch (below, and at the two other
+    # "next if $seen{$path}++" sites in this function) is deliberately
+    # kept even though forcing it to fire in a test would need a real
+    # filesystem where two different command names resolve to the
+    # identical absolute path - impractical to mock reliably, the same
+    # class of hard-to-force defensive branch as NodeRuntime.pm's
+    # filesystem-open-failure paths. t/162-...t proves the function
+    # never returns a duplicate in practice instead.
     my %seen;
 
     for my $command (qw(chromium chromium-browser google-chrome google-chrome-stable chrome)) {
@@ -56,16 +66,38 @@ sub _browser_candidates {
         push @candidates, $path;
     }
 
-    for my $path (
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        File::Spec->catfile( $ENV{HOME} || q{}, 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome' ),
-        '/Applications/Chromium.app/Contents/MacOS/Chromium',
-        File::Spec->catfile( $ENV{HOME} || q{}, 'Applications', 'Chromium.app', 'Contents', 'MacOS', 'Chromium' ),
-      )
-    {
-        next if !defined $path || $path eq q{};
-        next if $seen{$path}++;
-        push @candidates, $path;
+    if ( !_platform_is_windows() ) {
+        my @paths = (
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        );
+        if ( defined $ENV{HOME} && $ENV{HOME} ne q{} ) {
+            push @paths,
+              File::Spec->catfile( $ENV{HOME}, 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome' ),
+              File::Spec->catfile( $ENV{HOME}, 'Applications', 'Chromium.app', 'Contents', 'MacOS', 'Chromium' );
+        }
+        for my $path (@paths) {
+            next if $seen{$path}++;
+            push @candidates, $path;
+        }
+    }
+
+    # D2B-126: Chrome/Chromium's Windows installers typically do not add
+    # themselves to PATH, so - mirroring the macOS fallback above -
+    # Windows gets the same absolute-path safety net appended after PATH
+    # lookup, instead of falling straight through to Playwright's own
+    # bundled browser with no fallback at all when PATH lookup finds
+    # nothing usable. PATH candidates are still tried first (see order
+    # above), so these only end up mattering when PATH lookup fails.
+    if ( _platform_is_windows() ) {
+        for my $root ( $ENV{PROGRAMFILES}, $ENV{'PROGRAMFILES(X86)'}, $ENV{LOCALAPPDATA} ) {
+            next if !defined $root || $root eq q{};
+            for my $browser_dir ( File::Spec->catdir( 'Google', 'Chrome' ), 'Chromium' ) {
+                my $path = File::Spec->catfile( $root, $browser_dir, 'Application', 'chrome.exe' );
+                next if $seen{$path}++;
+                push @candidates, $path;
+            }
+        }
     }
 
     return @candidates;

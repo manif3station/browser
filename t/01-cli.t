@@ -186,7 +186,7 @@ is( $stderr, q{}, 'main keeps stderr empty for png mode success' );
     runner => TestRunner->new(),
 );
 
-is( $exit, 2, 'main exits non-zero on invalid input' );
+is( $exit, 2, 'main exits 2 on invalid input' );
 like( $stderr, qr/Missing URL/, 'main reports CLI parsing failures' );
 
 done_testing();

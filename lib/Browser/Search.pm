@@ -6,7 +6,10 @@ use warnings;
 use Browser::Runner ();
 use URI::Escape qw(uri_escape_utf8);
 
-sub _default_engines {
+# D2B-153: public (not underscore-prefixed) since Browser::CLI, a
+# standalone module outside this module's own search() flow, reuses it
+# to look engines up by name for --engine/--engines validation.
+sub default_engines {
     return (
         { name => 'bing',       url => sub { 'https://www.bing.com/search?q=' . uri_escape_utf8( $_[0] ) },       parser => \&_parse_bing },
         { name => 'google',     url => sub { 'https://www.google.com/search?q=' . uri_escape_utf8( $_[0] ) },     parser => \&_parse_google },
@@ -17,12 +20,25 @@ sub _default_engines {
 sub search {
     my (%args) = @_;
     my $query = $args{query};
+
+    # D2B-160: this guard is unreachable through Browser::CLI::
+    # execute_search(), which has its own earlier "Missing query" check
+    # - deliberate defense-in-depth for any direct caller of search()
+    # that bypasses the CLI. See t/160-...-search-guards-direct-call.t.
     die "Missing query" if !defined $query || $query =~ /\A\s*\z/;
 
-    my @engines = $args{engines} ? @{ $args{engines} } : _default_engines();
+    my @engines = $args{engines} ? @{ $args{engines} } : default_engines();
+
+    # D2B-160: unreachable via the CLI (execute_search() only passes
+    # engines when its own lookup already found at least one) -
+    # deliberate defense-in-depth, same rationale as above.
     die "At least one engine is required" if !@engines;
 
     my $max = defined $args{max} ? $args{max} : 10;
+
+    # D2B-160: unreachable via the CLI, which has its own earlier
+    # "--max must not be negative" check - deliberate defense-in-depth,
+    # same rationale as above.
     die "--max must not be negative" if $max < 0;
     my $runner = $args{runner} || Browser::Runner->new();
 
@@ -34,9 +50,7 @@ sub search {
     my @tried;
     my @failures;
     my $any_captcha = 0;
-    my $engine_index = -1;
     for my $engine (@engines) {
-        $engine_index++;
         my $url = $engine->{url}->($query);
         my $result = eval { $runner->request( method => 'GET', url => $url, headless => 1, timeout_ms => $timeout_ms ) };
         my $error = $@;
@@ -56,7 +70,7 @@ sub search {
 
         my $results = _parse_results( engine => $engine, body => $result->{body} );
 
-        if ( !@$results && length( $result->{body} // q{} ) > 200 && $engine_index < $#engines ) {
+        if ( !@$results && length( $result->{body} // q{} ) > 200 ) {
             push @failures, "$engine->{name} (no results parsed - engine markup may have changed)";
             next;
         }
@@ -83,6 +97,12 @@ sub _parse_results {
 
     return $engine->{parser}->($body) if ref $engine eq 'HASH' && ref $engine->{parser} eq 'CODE';
 
+    # D2B-130: this by-name fallback looks unreachable from search()'s own
+    # default engines (which always carry a parser), but it is deliberate
+    # D2B-070 backward compatibility for any external caller of
+    # search(engines => [...]) that hand-builds an engine hash without a
+    # parser key - see t/63-...-search-fixes.t's "legacy dispatch" test.
+    # Investigated and confirmed NOT dead code; do not remove.
     my $name = ref $engine eq 'HASH' ? ( $engine->{name} || q{} ) : ( $engine || q{} );
     return _parse_bing($body)       if $name eq 'bing';
     return _parse_google($body)     if $name eq 'google';
@@ -90,31 +110,31 @@ sub _parse_results {
     return [];
 }
 
-sub _parse_bing {
-    my ($body) = @_;
+# D2B-178: all 3 engine parsers below were identical except for their
+# own regex - this shared helper runs the common match/build/rank
+# loop, so each parser now differs only in the pattern it hands over.
+sub _parse_with_regex {
+    my ( $body, $regex ) = @_;
     my @results;
-    while ( $body =~ m{<li\s+class="b_algo">.*?<h2><a\s+href="([^"]+)">(.*?)</a></h2>.*?<div\s+class="b_caption"><p>(.*?)</p>}gs ) {
+    while ( $body =~ /$regex/gs ) {
         push @results, { url => _decode_entities($1), title => _strip_tags($2), snippet => _strip_tags($3) };
     }
     return _rank(@results);
+}
+
+sub _parse_bing {
+    my ($body) = @_;
+    return _parse_with_regex( $body, qr{<li\s+class="b_algo">.*?<h2><a\s+href="([^"]+)">(.*?)</a></h2>.*?<div\s+class="b_caption"><p>(.*?)</p>}s );
 }
 
 sub _parse_google {
     my ($body) = @_;
-    my @results;
-    while ( $body =~ m{<div\s+class="g">\s*<a\s+href="([^"]+)"><h3>(.*?)</h3></a>\s*<span\s+class="VwiC3b">(.*?)</span>}gs ) {
-        push @results, { url => _decode_entities($1), title => _strip_tags($2), snippet => _strip_tags($3) };
-    }
-    return _rank(@results);
+    return _parse_with_regex( $body, qr{<div\s+class="g">\s*<a\s+href="([^"]+)"><h3>(.*?)</h3></a>\s*<span\s+class="VwiC3b">(.*?)</span>}s );
 }
 
 sub _parse_duckduckgo {
     my ($body) = @_;
-    my @results;
-    while ( $body =~ m{<a\s+class="result__a"\s+href="([^"]+)">(.*?)</a>\s*<a\s+class="result__snippet">(.*?)</a>}gs ) {
-        push @results, { url => _decode_entities($1), title => _strip_tags($2), snippet => _strip_tags($3) };
-    }
-    return _rank(@results);
+    return _parse_with_regex( $body, qr{<a\s+class="result__a"\s+href="([^"]+)">(.*?)</a>\s*<a\s+class="result__snippet">(.*?)</a>}s );
 }
 
 sub _rank {
@@ -134,11 +154,26 @@ sub _strip_tags {
 }
 
 my %NAMED_ENTITIES = (
-    amp  => '&',
-    lt   => '<',
-    gt   => '>',
-    quot => '"',
-    apos => q{'},
+    amp    => '&',
+    lt     => '<',
+    gt     => '>',
+    quot   => '"',
+    apos   => q{'},
+
+    # D2B-176: common typographic entities realistically found in real
+    # search-engine snippet/title text - previously left as literal
+    # entity text since only the 5 entities above were mapped.
+    nbsp   => "\x{00A0}",
+    mdash  => "\x{2014}",
+    ndash  => "\x{2013}",
+    lsquo  => "\x{2018}",
+    rsquo  => "\x{2019}",
+    ldquo  => "\x{201C}",
+    rdquo  => "\x{201D}",
+    hellip => "\x{2026}",
+    copy   => "\x{00A9}",
+    trade  => "\x{2122}",
+    reg    => "\x{00AE}",
 );
 
 sub _decode_entities {

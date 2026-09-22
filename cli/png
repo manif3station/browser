@@ -8,3 +8,22 @@ use lib "$Bin/../lib";
 use Browser::CLI ();
 
 exit Browser::CLI::main( method => 'PNG', argv => \@ARGV );
+
+__END__
+
+=head1 NAME
+
+browser.png - Capture a full-page screenshot with Playwright
+
+=head1 SYNOPSIS
+
+  dashboard browser.png <url> [OPTIONS]
+
+See SKILLS.md (or C<dashboard browser.skills>) for the full flag reference
+and result payload shape.
+
+=head1 EXIT STATUS
+
+C<0> on success; C<2> on a usage error or an unhandled request failure.
+
+=cut

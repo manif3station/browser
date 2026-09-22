@@ -1,13 +1,23 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use FindBin;
+use FindBin qw($Bin);
 use File::Spec;
+use lib "$Bin/../lib";
 
-my $manual = File::Spec->catfile( $FindBin::Bin, '..', 'SKILLS.md' );
-open my $fh, '<:raw', $manual or die "Cannot read browser skill manual: $!\n";
-print while <$fh>;
-close $fh or die "Cannot close browser skill manual: $!\n";
+use Browser::CLI ();
+
+my $manual = File::Spec->catfile( $Bin, '..', 'SKILLS.md' );
+my $ok = eval {
+    open my $fh, '<:raw', $manual or die "Cannot read browser skill manual: $!\n";
+    print while <$fh>;
+    close $fh or die "Cannot close browser skill manual: $!\n";
+    1;
+};
+if ( !$ok ) {
+    print {*STDERR} Browser::CLI::sanitize_error($@), "\n";
+    exit 2;
+}
 
 __END__
 
@@ -18,5 +28,11 @@ browser.skills - Print the raw browser skill agent manual
 =head1 SYNOPSIS
 
   dashboard browser.skills
+
+=head1 EXIT STATUS
+
+C<0> on success; C<2> if C<SKILLS.md> cannot be opened or closed (e.g.
+missing or unreadable), matching every other C<browser.*> command's
+convention. A failure while writing to stdout itself is not caught.
 
 =cut

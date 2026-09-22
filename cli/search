@@ -8,3 +8,22 @@ use lib "$Bin/../lib";
 use Browser::CLI ();
 
 exit Browser::CLI::main_search( argv => \@ARGV );
+
+__END__
+
+=head1 NAME
+
+browser.search - Run a multi-engine web search with CAPTCHA-triggered fallback
+
+=head1 SYNOPSIS
+
+  dashboard browser.search <query> [OPTIONS]
+
+See SKILLS.md (or C<dashboard browser.skills>) for the full flag reference
+and result payload shape.
+
+=head1 EXIT STATUS
+
+C<0> on success; C<2> on a usage error or when every configured engine fails.
+
+=cut

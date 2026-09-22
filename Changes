@@ -1,5 +1,680 @@
 Revision history for browser
 
+0.155 2026-09-22
+ - refactored lib/Browser/Runner/NodeRuntime.pm's 12 near-identical
+   required-argument guards (my $x = $args{x} || die "x is
+   required";, repeated across 3 distinct argument names -
+   home_root x7, package_json x4, module x1) to share one new
+   _required_arg helper, centralizing the message format in one
+   place. Pure refactor, no behavior change: verified by the full
+   existing NodeRuntime test suite (17 files, 272 assertions) passing
+   unchanged before and after. CORRECTION during drafting: the
+   initial grep for this ticket's own scope found only 11 occurrences
+   (missing the distinct 'module is required' guard); a broader
+   re-grep before writing any code caught the true count of 12 and
+   the refactor covers all of them. Found during a scheduled
+   improvement hunt (JOB-004), the second pure maintainability-
+   refactor ticket this session after D2B-178 (D2B-179)
+
+0.154 2026-09-22
+ - refactored lib/Browser/Search.pm's 3 engine parsers (_parse_bing,
+   _parse_google, _parse_duckduckgo), which were each structurally
+   identical except for their own regex, to share one new
+   _parse_with_regex helper - reducing 3 copies of the same
+   loop/build/rank logic to 1. Pure refactor, no behavior change:
+   verified by the full existing search test suite (17 files, 126
+   assertions covering all 3 parsers, entity-decode, dedup-pinning,
+   fallback logic) passing unchanged before and after. Self-caught
+   and fixed a real regression mid-implementation: the first version
+   dropped the /s regex modifier when moving each pattern from an
+   inline eval to a qr{} interpolated into the shared helper - a
+   qr{} does not inherit an outer match's /s flag, so multi-line
+   HTML briefly stopped matching, caught by re-running the full
+   suite (not just a subset) before considering the work done. Found
+   during a scheduled improvement hunt (JOB-004), the first pure
+   maintainability-refactor ticket this session, distinct from its
+   many bug/coverage/doc-gap tickets (D2B-178)
+
+0.153 2026-09-22
+ - added lib/Browser/Runner/VersionCompare.pm to docs/overview.md's
+   Delivery section, which had drifted since D2B-155 (this session)
+   extracted it from NodeRuntime.pm - SKILLS.md and README.md were
+   both updated at the time, but docs/overview.md's separate,
+   differently-worded Delivery bullet was missed. Added a new
+   regression test that globs lib/Browser/Runner/*.pm and asserts
+   every file is named somewhere in docs/overview.md, guarding
+   against this class of drift recurring for any current or future
+   module. No behavioral change. Found by direct doc-file
+   investigation after 2 consecutive fork-hunts (search _rank edge
+   cases, BrowserPath.pm Windows env-var handling) returned genuinely
+   clean results (D2B-177)
+
+0.152 2026-09-22
+ - extended lib/Browser/Search.pm's %NAMED_ENTITIES with 11 common
+   typographic entities realistically found in real search-engine
+   snippet/title text: nbsp, mdash, ndash, lsquo, rsquo, ldquo, rdquo,
+   hellip, copy, trade, reg. Previously only amp/lt/gt/quot/apos
+   (D2B-050) plus numeric/hex references and surrogate pairs (D2B-054)
+   were decoded - every other named entity, including these common
+   ones, leaked through as literal entity text into browser.search's
+   JSON output. Verified directly in Docker before the fix that all
+   9 tested entities were unchanged; genuine red-green TDD (9 of 12
+   new assertions failed pre-fix). Updated README.md/docs/usage.md's
+   entity lists to match. Found by a fork-hunt during D2B-175's
+   pipeline-continuity gate, investigating entity-decoding gaps and
+   _strip_tags's nested/malformed-markup handling (the latter checked
+   and found clean) (D2B-176)
+
+0.151 2026-09-22
+ - documented and pinned browser.search's existing behavior of not
+   deduplicating result entries that share an identical URL (a
+   realistic collision on a real search page, e.g. an ad slot
+   alongside its matching organic result). No test anywhere exercised
+   this before now; verified directly in Docker that a 3-block bing-
+   style body with entries 1 and 3 sharing a URL returns all 3
+   entries via _parse_bing, un-deduplicated - each still consumes its
+   own --max slot. This is deliberately left as a documented
+   limitation rather than a code change - whether to actually
+   deduplicate is a product decision for the owner, not decided here.
+   Added t/175-d2b-175-search-duplicate-url-no-dedup.t; updated
+   README.md and docs/usage.md's Search Mode sections. No behavioral
+   change. Found by a fork-hunt during D2B-174's pipeline-continuity
+   gate, investigating search result-count/pagination edge cases; a
+   parallel angle (engine_used/engines_tried consistency) was checked
+   and ruled out by construction (D2B-175)
+
+0.150 2026-09-22
+ - corrected an overstated comment in
+   t/29-d2b-032-tag-name-must-match.t claiming a body with no
+   explicit text/html content-type is now always escaped/wrapped -
+   true only for fragment-shaped bodies. lib/Browser/Runner.pm's
+   _response_document also has 2 unconditional body-prefix bypass
+   checks (a body starting with a boundary-checked <!doctype html> or
+   <html> tag) that trust the body raw regardless of the declared
+   content-type - already documented in README.md edge case 6, but
+   untested and easily missed by the fragment-focused comment. Added
+   t/174-d2b-174-html-tag-prefix-bypass.t pinning both the bypass and
+   the contrasting non-bypass case (a non-html-tag-shaped body is
+   still wrapped). No behavioral change. Found by a fork-hunt during
+   D2B-173's pipeline-continuity gate; the fork's own initial framing
+   (an application/xml example) did not actually hold up under
+   independent re-verification, but led to this narrower, verified
+   gap (D2B-174)
+
+0.149 2026-09-22
+ - taught _is_captcha_page (lib/Browser/Runner.pm) to recognize
+   Cloudflare's own interstitial/block pages: "Just a moment..." (its
+   JS-challenge page) and "Attention Required! | Cloudflare" (its
+   block page for flagged traffic). Neither used the word "captcha"
+   nor any recognized reCAPTCHA/hCaptcha widget markup, so they were
+   previously invisible to this skill's anti-bot-wall detection - a
+   real behavior change, unlike this session's recent coverage-only
+   tickets. Added t/173-d2b-173-cloudflare-challenge-detection.t
+   (genuine red-green TDD: 2 of 3 assertions failed before the fix).
+   Updated README.md and docs/usage.md's captcha-detection phrase
+   lists to match; SKILLS.md has no phrase-enumerating section to
+   extend. All existing captcha-detection tests (including the D2B-083
+   false-positive regression) continue to pass unchanged. Found by a
+   fork-hunt during D2B-172's pipeline-continuity gate, investigating
+   captcha-detection edge cases (D2B-173)
+
+0.148 2026-09-22
+ - documented and tested the "0 disables the timeout" caveat for
+   browser.get/post/png's --timeout-ms flag: Playwright's goto()
+   treats timeout: 0 as disabling the navigation timeout entirely,
+   not "instant" - a literal reading of --timeout-ms 0 can genuinely
+   hang. This was already documented for browser.search in SKILLS.md
+   but absent for get/post/png, and nowhere in README.md/docs/usage.md
+   for either command. Added matching notes to all 3 doc files and a
+   new regression test asserting _goto_options(timeout_ms => 0)
+   produces timeout => 0, distinct from the existing test covering a
+   positive override value. No behavioral change. Found by a fork-hunt
+   during D2B-171's pipeline-continuity gate, investigating
+   timeout/retry semantics (D2B-172)
+
+0.147 2026-09-22
+ - closed the untested missing-HOME guard in
+   lib/Browser/Runner/NodeRuntime.pm's _ensure_node_runtime - the
+   exact sibling of D2B-170's Runner.pm::_jquery_path finding in the
+   sister module. No behavioral change - the guard already does the
+   right thing. Added t/171-d2b-171-noderuntime-missing-home.t. Found
+   by directly grepping every "|| die"/"or die" guard across
+   lib/Browser/*.pm and lib/Browser/Runner/*.pm and cross-checking
+   each against t/*.t for coverage, immediately after D2B-170 shipped
+   (D2B-171)
+
+0.146 2026-09-22
+ - closed the untested missing-HOME guard in
+   lib/Browser/Runner.pm's _jquery_path: it reads $ENV{HOME} and dies
+   with "HOME is required for browser skill jQuery injection" before
+   ever checking whether jquery.min.js exists there. Both existing
+   tests for this sub always set $ENV{HOME} to a temp directory first,
+   so this die branch had zero coverage. No behavioral change - the
+   branch already does the right thing. Added a new assertion in
+   t/04-runner-unit.t beside the 2 existing _jquery_path tests. Found
+   by following up a lead from a fork-hunt during D2B-169's
+   pipeline-continuity gate (--data JSON parsing and browser-cleanup
+   angles, both clean) that suggested checking _run_get/_run_png's
+   surrounding code more closely (D2B-170)
+
+0.145 2026-09-22
+ - closed the untested Getopt::Long ambiguous-abbreviation error path
+   in lib/Browser/CLI.pm's execute_search: --engine and --engines both
+   start with "engine", so an abbreviation matching both (e.g. --e)
+   triggers Getopt::Long's own ambiguity detection. execute_search
+   already surfaced this correctly via its existing "Invalid options:
+   ..." die, giving exit code 2 - the shared exit-2 convention this
+   session already documented (D2B-139/145/147/148/149/150) - but the
+   path had zero test coverage. No behavioral change. Added
+   t/169-d2b-169-search-ambiguous-engine-abbreviation.t. Found by a
+   5th fork-hunt during D2B-167's pipeline-continuity gate,
+   investigating Getopt::Long CLI argument-parsing edge cases; a
+   parallel dead-code/unused-subroutine sweep found nothing (D2B-169)
+
+0.144 2026-09-22
+ - closed the one remaining untested branch in
+   lib/Browser/Runner.pm's _run_controller_script: the compile-time
+   eval that builds a controller-mode --script (--playwright/--agent
+   /--flow) into a closure (line ~297-306). Only its sibling
+   runtime-die branch (script compiles, then dies when called) had a
+   regression test; a syntactically-invalid --script had none.
+   Verified in Docker that the branch already behaves correctly -
+   reporting "Controller script failed: syntax error..." distinctly
+   from the runtime-die case. Branch coverage on Runner.pm rose from
+   97.8% to 98.9%. No behavioral change. Added
+   t/167-d2b-167-controller-script-syntax-error.t. Found by a 4th
+   fork-hunt during D2B-166's pipeline-continuity gate, after 3 prior
+   fork-hunts (14 angles, including a full perlsec audit) came up
+   empty (D2B-167)
+
+0.143 2026-09-22
+ - fixed a documentation gap: D2B-158's --script must-not-be-empty
+   refusal (shipped this session) had zero mentions in SKILLS.md,
+   README.md, or docs/usage.md, unlike D2B-156 (documented) and
+   D2B-157 (covered generically by existing wording). Added matching
+   notes to all 3 doc files stating an explicit empty --script is
+   refused with "--script must not be empty" in both plain and
+   controller mode, while omitting --script entirely remains an
+   unaffected silent no-op. No code touched. New regression test at
+   t/166-d2b-166-script-empty-doc-accuracy.t. Found by a fork-hunt
+   doing a fresh SKILLS.md-accuracy sweep after the branch-coverage
+   vein (D2B-160-165) was confirmed exhausted (D2B-166)
+
+0.142 2026-09-22
+ - closed 2 reachable branches in
+   lib/Browser/Runner/VersionCompare.pm found by a branch-coverage
+   sweep extending the D2B-160/161/162/163/164 pattern:
+   version_satisfies_spec's top-of-function undef/empty-string guard
+   for its 2 arguments (never triggered by any of the 11 existing call
+   sites), and its !@installed-or-!@minimum guard, reachable under a
+   caret-range spec when the installed version string does not start
+   with digits (e.g. version_satisfies_spec('abc', '^1.2.3')). Branch
+   coverage was 93.3% before this ticket. Added direct-call regression
+   tests at t/165-d2b-165-versioncompare-remaining-branches.t proving
+   both branches already work correctly. No behavioral change. Found
+   by a fork-hunt during D2B-164's pipeline-continuity gate, with the
+   finding re-verified in Docker after the fork-hunt's own honest
+   uncertainty flag about one of the two branches (D2B-165)
+
+0.141 2026-09-22
+ - closed 4 reachable branch groups in lib/Browser/Runner.pm found by a
+   branch-coverage sweep extending the D2B-160/161/162/163 pattern:
+   _run_png's missing-directory creation (make_path), _run_png's
+   $response-falsy degradation of headers/status, _is_captcha_page's
+   "verify you are human" phrase (the only one of 4 captcha phrases
+   never directly tested), and _response_document's undef-body
+   default. Branch coverage was 92.3% before this ticket. Added
+   direct-call/mock regression tests at
+   t/164-d2b-164-runner-remaining-branches.t proving each branch group
+   already works correctly. No behavioral change. Two lower-value
+   lines (76, 306 - I/O-close-failure and eval-failure branches) were
+   deliberately left untouched, matching the same convention already
+   established for NodeRuntime.pm. Found by a fork-hunt during
+   D2B-163's pipeline-continuity gate (D2B-164)
+
+0.140 2026-09-22
+ - closed 3 reachable-but-untested branches in lib/Browser/CLI.pm found
+   by a branch-coverage sweep extending the D2B-160/161/162 pattern to
+   CLI.pm: execute()'s Unsupported method guard, execute()'s
+   Unexpected arguments guard, and execute_search()'s own copy of the
+   same Unexpected arguments guard. Branch coverage was 92.8% before
+   this ticket. Added 3 direct-call regression tests at
+   t/163-d2b-163-cli-remaining-branches.t proving each guard already
+   works correctly. No behavioral change - the guards were already
+   functionally correct. Runner.pm's own smaller branch-coverage gap
+   (92.3%, mixed reachability) was investigated less deeply and left
+   for a possible future ticket. Found by a fork-hunt during D2B-162's
+   pipeline-continuity gate (D2B-163)
+
+0.139 2026-09-22
+ - improved lib/Browser/Runner/BrowserPath.pm's branch coverage from
+   85.7% to 94.6%, following the D2B-160/161 pattern: a branch-coverage
+   sweep across the remaining lib/ modules (CLI.pm=92.8, Runner.pm=
+   92.3, NodeRuntime.pm=76.8, BrowserPath.pm=85.7, VersionCompare.pm=
+   93.3) found BrowserPath.pm's gap was reachable via direct calls,
+   unlike NodeRuntime.pm's larger gap (mostly low-value filesystem-
+   open-failure branches, left untouched, same convention already
+   established for that class of path). Added direct-call tests for
+   _browser_path_is_usable's and _find_in_path's undef/empty/
+   relative-path rejection guards and _command_lookup_names' Windows
+   already-has-extension branch (using the existing local $^O =
+   'MSWin32' test pattern). The seen-path dedup guard's true branch
+   (3 sites) turned out impractical to force without complex
+   filesystem mocking - documented instead with a comment explaining
+   why, rather than an artificial test. New regression test at
+   t/162-d2b-162-browserpath-remaining-branches.t. No behavioral
+   change. Found by the main session's own Devel::Cover branch sweep
+   after a fork-hunt got stuck in a wait loop (D2B-162)
+
+0.138 2026-09-22
+ - closed the 4 remaining untested branches in lib/Browser/Search.pm
+   that D2B-160 identified but explicitly left out of scope: the
+   empty-error-message fallback ('unknown error') in search()'s
+   request-failure path; _parse_results' undef-body default to the
+   empty string; _strip_tags' undef-value early return; and
+   _decode_entities' unknown-named-entity fallback (leaves it
+   unescaped). Verified via Devel::Cover -coverage branch that all 4
+   were genuinely uncovered before this ticket (branch coverage
+   unchanged at 92.0% since D2B-160). Added 4 direct-call regression
+   tests at t/161-d2b-161-search-remaining-branches.t proving each
+   branch already does the right thing - no code change, no
+   behavioral change. Found by a fork-hunt verifying D2B-160's own
+   fold-back-flagged follow-up items (D2B-161)
+
+0.137 2026-09-22
+ - fixed an undocumented defensive-duplication gap: 3 validation guards
+   in Browser::Search::search() (Missing query, At least one engine is
+   required, --max must not be negative) were unreachable through
+   Browser::CLI::execute_search() (which has its own earlier copies of
+   the same 3 checks) and had neither a comment nor a direct test
+   proving they were intentional, unlike this same file's own D2B-130
+   precedent for an identical situation. Verified via Devel::Cover
+   -coverage branch: lib/Browser/Search.pm sat at branch=86.0 despite
+   stmt=100.0/sub=100.0 - this project's coverage gate never measures
+   branch coverage, so the gap was invisible all session. Added a
+   D2B-130-style comment above each guard and 3 direct-call regression
+   tests at t/160-d2b-160-search-guards-direct-call.t proving each
+   guard works correctly for any caller bypassing execute_search(). No
+   behavior change - the guards were already functionally correct.
+   Found by a fork-hunt's deep branch-coverage review, after a first
+   fork-hunt attempt found nothing and a second, broader one turned up
+   this finding (D2B-160)
+
+0.136 2026-09-22
+ - fixed a documentation drift: README.md and docs/usage.md's
+   URL-missing-check claim still described the pre-D2B-156 behavior
+   ("only refused as missing when it is truly absent or an empty
+   string"), never updated when D2B-156 (this session) widened
+   lib/Browser/CLI.pm:214's check to also refuse a whitespace-only URL.
+   Updated both lines to state the current, complete rule (undefined,
+   empty-string, or whitespace-only are all refused), keeping the
+   existing "0 is accepted" clarification unchanged. No code touched.
+   New regression test at
+   t/159-d2b-159-url-missing-doc-accuracy.t. Found by a fork-hunt
+   doing a documentation-accuracy check after the validation-asymmetry
+   pattern was confirmed exhausted this cycle (D2B-159)
+
+0.135 2026-09-22
+ - fixed an input-validation inconsistency: Browser::Runner::_run_script
+   (lib/Browser/Runner.pm) only checked !defined $args{script} before
+   falling through to $page->evaluate('') in plain (non-controller)
+   mode, so an explicit empty-string --script value silently evaluated
+   an empty script instead of being refused - unlike controller mode's
+   _run_controller_script, which already refuses the same empty value
+   with "Controller mode requires --script". Added a matching die in
+   the plain-mode branch. Omitting --script entirely remains an
+   unaffected no-op. New regression test at
+   t/158-d2b-158-script-empty-string-refused.t. Found by a fork-hunt
+   during D2B-157's pipeline-continuity gate, after --engine/--engines/
+   --file/--data/--timeout-ms were all checked for the same asymmetry
+   and found already correct (D2B-158)
+
+0.134 2026-09-22
+ - fixed an input-validation inconsistency: --browser's default
+   handling (lib/Browser/Runner/BrowserPath.pm) used
+   $args{browser} || 'chrome', which silently coerced an explicit
+   empty-string --browser value to the default instead of refusing it
+   - unlike --wait-until's already-established precedent
+   (lib/Browser/Runner.pm), which distinguishes "not given" from
+   "given but empty" and dies on the latter. Changed to
+   defined($args{browser}) ? $args{browser} : 'chrome', letting the
+   existing Unsupported-browser-type check naturally reject an empty
+   string. Omitting --browser entirely still defaults to chrome
+   unchanged. New regression test at
+   t/157-d2b-157-browser-empty-string-refused.t. Found by a fork-hunt
+   during D2B-156's pipeline-continuity gate, after the private-sub,
+   file-size-decomposition, and URL-validation-asymmetry patterns were
+   all independently exhausted (D2B-157)
+
+0.133 2026-09-22
+ - fixed an input-validation inconsistency: browser.get/post/png's
+   "Missing URL" check (lib/Browser/CLI.pm:214) only rejected an
+   undefined or exactly-empty-string URL, unlike browser.search's
+   "Missing query" check 3 lines away (line 288), which already used a
+   whitespace-only regex. A whitespace-only URL passed through
+   untouched and reached Playwright as a literal URL instead of being
+   refused cleanly. Changed line 214 to the same /\A\s*\z/ pattern
+   browser.search already uses. The literal URL "0" (D2B-025) remains
+   correctly accepted. New regression test at
+   t/156-d2b-156-whitespace-url-missing.t. Found by a fork-hunt during
+   D2B-155's pipeline-continuity gate, after the private-sub and
+   file-size decomposition patterns were both independently verified
+   exhausted (D2B-156)
+
+0.132 2026-09-22
+ - decomposed lib/Browser/Runner/NodeRuntime.pm: it had grown to 499
+   lines, 1 under this project's own 500-line decomposition threshold.
+   Extracted the self-contained semver-subset comparator
+   (_version_satisfies_spec/_version_parts/_compare_version_parts) into
+   a new lib/Browser/Runner/VersionCompare.pm with public
+   (non-underscore) names and an explanatory comment, following the
+   same D2B-147/153/154 naming convention. Updated NodeRuntime.pm's one
+   internal call site, plus 4 test files that called the private names
+   directly (2 caught mid-implementation after the original fork-hunt
+   report missed them: t/04-runner-unit.t and
+   t/16-d2b-013-module-split.t). NodeRuntime.pm is now 456 lines. No
+   behavioral change. New regression test at
+   t/155-d2b-155-versioncompare-extracted.t. Found by a fork-hunt during
+   D2B-154's pipeline-continuity gate, after first verifying the
+   private-sub cross-module pattern was genuinely exhausted (D2B-155)
+
+0.131 2026-09-22
+ - fixed a naming-convention violation: Browser::Runner::NodeRuntime::
+   _skill_root (underscore-prefixed, private by this codebase's own
+   convention) was called from outside its defining module by
+   Browser::CLI::_read_version() (lib/Browser/CLI.pm:167), and by two
+   test files (t/38-d2b-038-skill-root-cwd-false-positive.t and, caught
+   mid-implementation after the original fork-hunt report missed it,
+   t/04-runner-unit.t). Third instance of the D2B-147/D2B-153 pattern.
+   Promoted to a public Browser::Runner::NodeRuntime::skill_root with an
+   explanatory comment and updated all 4 call sites; the other
+   underscore-prefixed cross-calls within the Browser::Runner/
+   BrowserPath/NodeRuntime internal-family (Runner.pm, BrowserPath.pm)
+   were deliberately left untouched as a separate, intentional
+   convention, not this bug. No behavioral change. New regression test
+   at t/154-d2b-154-skill-root-public.t. Found by a fork-hunt during
+   D2B-153's pipeline-continuity gate (D2B-154)
+
+0.130 2026-09-21
+ - fixed a naming-convention violation: Browser::Search::_default_engines
+   (underscore-prefixed, private by this codebase's own convention) was
+   called from outside its defining module by
+   Browser::CLI::execute_search() (lib/Browser/CLI.pm:317), and by two
+   test files (t/63-d2b-063-064-070-search-fixes.t,
+   t/24-d2b-027-duckduckgo-direct-url.t). Identical pattern to D2B-147's
+   _sanitize_error -> public sanitize_error promotion. Promoted to a
+   public Browser::Search::default_engines with an explanatory comment
+   (D2B-147 convention) and updated all 4 call sites. No behavioral
+   change. New regression test at
+   t/153-d2b-153-default-engines-public.t. Found by a fork-hunt during
+   D2B-152's pipeline-continuity gate (D2B-153)
+
+0.129 2026-09-21
+ - fixed a real doc-accuracy gap: SKILLS.md's --max N bullet (browser.
+   search flags) said only "refused if negative", omitting its default
+   value (10) - unlike its own adjacent --timeout-ms bullet ("per-engine
+   request timeout, default 10s"), unlike README.md/docs/usage.md, and
+   unlike the CLI's own --help usage text, all of which correctly state
+   --max's default is 10. Verified lib/Browser/CLI.pm:275 sets
+   max=>10. Updated SKILLS.md's --max bullet to state the default
+   explicitly, matching its sibling bullet's style. New regression test
+   at t/152-d2b-152-skills-max-default-documented.t. No behavioral
+   change. Found by a fork-hunt during D2B-151's pipeline-continuity
+   gate (D2B-152)
+
+0.128 2026-09-21
+ - refactored a real code-quality issue: Browser::CLI::execute_search
+   applied the exact same non-breaking-space-aware whitespace-trim
+   regex (D2B-086/D2B-127) independently in two places - once to
+   --engine's single value, once inline inside the map for --engines'
+   comma-split list. Extracted a private _trim_engine_name($name)
+   helper containing the regex exactly once, called from both sites,
+   so a future revision to this trim rule only needs one place to
+   change. No behavior change - verified the existing D2B-086/D2B-127
+   whitespace-trim tests (t/41-*.t, t/106-*.t, 11 assertions) still
+   pass unchanged before and after the refactor. Found by a fork-hunt
+   improvement hunt during D2B-150's pipeline-continuity gate (D2B-151)
+
+0.127 2026-09-21
+ - fixed the third and final remaining instance of the vague "non-zero"
+   exit-code wording the D2B-148/D2B-149 chain already fixed elsewhere:
+   README.md's Edge Cases list (item 3) said "the Playwright run exits
+   non-zero" for an unavailable target host, instead of naming the
+   actual, always-exactly-2 value. This instance was missed by D2B-149's
+   own closing grep, whose shell --include glob pattern did not actually
+   match README.md in that run. Updated the line to name exit code 2
+   explicitly. Replaced the fragile shell-glob check with a genuinely
+   repo-wide File::Find-based regression test at
+   t/150-d2b-150-repo-wide-non-zero-guard.t, scanning cli/, docs/, lib/,
+   t/, README.md, and SKILLS.md for any remaining "non-zero" instance
+   (excluding Changes' own historical entries and the doc-consistency
+   test files' own intentional pattern text) - confirms zero instances
+   remain. No behavioral change. Found by a fork-hunt during D2B-149's
+   pipeline-continuity gate, closing this small wording chain (D2B-150)
+
+0.126 2026-09-21
+ - fixed 2 remaining instances of the vague "non-zero" exit-code wording
+   D2B-148 already fixed in cli/get/post/png/search's own EXIT STATUS
+   POD: t/01-cli.t's own test description said "main exits non-zero on
+   invalid input" while the assertion itself already checked exit code
+   2 explicitly - the description under-specified what the test
+   actually proves. docs/usage.md's bullet about an unreachable target
+   URL said "the command exits non-zero" instead of naming the value.
+   Both were found and deliberately deferred (not scope-crept) during
+   D2B-148's own qa-100-coverage-gate code-review round. Updated both
+   to name exit code 2 explicitly. New regression test at
+   t/149-d2b-149-non-zero-wording-fixed.t. No behavioral change - the
+   assertion already checked the correct value. Found by a fork-hunt
+   during D2B-148's own review round (D2B-149)
+
+0.125 2026-09-21
+ - fixed a real doc-accuracy gap: cli/get/post/png/search's own EXIT
+   STATUS POD sections all said the vague "C<0> on success; non-zero
+   on a usage error..." without naming the actual value. Verified via
+   grep of every return/exit statement in lib/Browser/CLI.pm (which all
+   four delegate to) that only 0 and 2 are ever produced - there is no
+   other exit path. This also left cli/skills's own EXIT STATUS POD
+   (added in D2B-147, this session), which explicitly claims to match
+   "every other browser.* command's convention" of exiting 2,
+   unverifiable purely from reading the other four commands' own docs.
+   Updated all 4 sections to name C<2> explicitly. New regression test
+   at t/148-d2b-148-exit-status-pod-names-code.t asserting all 5 cli/*
+   scripts' EXIT STATUS POD sections name C<2> explicitly. No code
+   change. Found by a fork-hunt during D2B-147's pipeline-continuity
+   gate (D2B-148)
+
+0.124 2026-09-21
+ - fixed a real bug: cli/skills (unlike cli/get/post/png/search, all of
+   which delegate to Browser::CLI::main's shared _sanitize_error()/
+   exit-2 convention) died on open/close failure with a raw, uncaught
+   Perl death, and the resulting exit code was whatever errno happened
+   to produce - not the fixed exit 2 every other browser.* command
+   guarantees on failure. Live-verified via Docker: a missing SKILLS.md
+   exited 2 (ENOENT, by accident), but SKILLS.md replaced by a
+   directory exited 21 (EISDIR) - two different exit codes for the same
+   class of user-facing "can't read the manual" failure, proving the
+   code was accidental, not a deliberate contract. Wrapped cli/skills's
+   body in eval, reusing Browser::CLI::_sanitize_error() and exiting 2
+   on any failure, matching every other command's convention. Added an
+   EXIT STATUS POD section matching the other four commands' wording.
+   New regression test at t/147-d2b-147-skills-exit-code-convention.t
+   running cli/skills as a real subprocess against scratch-copied
+   fixtures, covering both failure causes plus a success-path
+   regression guard. Found by a fork-hunt during D2B-146's
+   pipeline-continuity gate (D2B-147)
+
+0.123 2026-09-21
+ - fixed a real doc-accuracy gap: README.md's own "Developer Dashboard
+   Feature Added" and "Layout" sections listed only 3 of the 4 real
+   dotted commands and 4 of the 5 real cli/* entrypoints, omitting
+   `dashboard browser.skills` and `cli/skills` entirely - despite
+   README.md documenting browser.skills' behavior in prose elsewhere in
+   the same file, and despite SKILLS.md's own equivalent layout list
+   already listing it correctly. Verified via grep that cli/skills is a
+   real, existing entrypoint (t/97-d2b-097-skills-command.t already
+   tests it) - not vaporware, just under-listed in README.md's own
+   structural summary sections. Added the missing line to each section.
+   New regression test at t/146-d2b-146-readme-skills-command-listed.t
+   asserting both sections mention it, plus a regression guard
+   confirming the other 4 commands/entrypoints remain listed. No code
+   change. Found by a fork-hunt targeting the pending doc-accuracy hunt
+   during D2B-145's pipeline-continuity gate (D2B-146)
+
+0.122 2026-09-21
+ - fixed a real doc gap in the CLI's own --help output: neither
+   Browser::CLI::_usage_get_post_png (browser.get/post/png) nor
+   _usage_search (browser.search) ever mentioned --version in their
+   usage heredoc text, even though --version (D2B-124) is a real,
+   equally-prioritized flag on all four commands sharing --help's
+   identical pre-parse short-circuit behavior. A user relying on --help
+   alone (rather than external docs, which do mention --version) had no
+   way to discover it exists. Live-verified via Docker: direct
+   execute()/execute_search() calls returning the real --help usage
+   string for all four commands showed no --version line anywhere.
+   Added a --version line next to --help in both heredocs. New
+   regression test at t/145-d2b-145-help-usage-mentions-version.t
+   covering all four commands, plus a regression guard confirming
+   --help itself remains documented. Found by a fork-hunt during
+   D2B-144's pipeline-continuity gate (D2B-145)
+
+0.121 2026-09-21
+ - fixed a real bug: Browser::Search::search()'s "no results parsed - the
+   engine's markup may have changed" failure-recording heuristic only
+   applied when the failing engine was NOT the last (or sole) one tried -
+   a stray $engine_index < $#engines condition meant the last/only
+   engine's identical zero-parsed-results case fell through past the
+   failure check straight to a "successful" empty-results return,
+   indistinguishable from a query that genuinely has zero results.
+   Live-verified via Docker (FakeRunner, no real network):
+   search(query=>'test query', engines=>[{name=>'duckduckgo', url=>...,
+   parser=>sub{[]}}], runner=>FakeRunner->new()) with a >200-char
+   non-CAPTCHA body returned {engine_used=>'duckduckgo', results=>[]}
+   instead of dying with the aggregated 'All search engines failed: ...'
+   message every other engine's identical case already produced. Removed
+   the special-case (and the now-dead $engine_index variable it existed
+   for) so every engine, including the last, is treated uniformly.
+   docs/usage.md's own description of this heuristic explicitly
+   documented the buggy "(not the last engine)" behavior as intentional -
+   corrected to describe the fixed, uniform behavior. New regression
+   test at t/144-d2b-144-last-engine-zero-results-failure.t covering the
+   sole-engine case, the last-of-two-engines case, and a regression
+   guard confirming the existing non-last-engine fallback (t/63-*.t)
+   remains completely unchanged. Found by a fork-hunt during D2B-140's
+   pipeline-continuity gate (D2B-144)
+
+0.120 2026-09-21
+ - broadened a doc scope gap left by D2B-138: that ticket documented the
+   --help/--version argv pre-parse collision only for browser.post --data,
+   but Browser::CLI's _argv_requests_help/_argv_requests_version scan the
+   entire raw argv for a standalone --help/--version element before any
+   flag's value is assigned by Getopt::Long, so the exact same collision
+   applies to every string-valued flag on all four commands - --script,
+   --browser, --wait-until, --file (get/post/png), --engine, --engines
+   (search), and --data itself. Live-verified via Docker:
+   Browser::CLI::execute(method=>'GET', argv=>['URL','--script','--help'])
+   returns help text instead of running --script. Broadened the existing
+   note in README.md, docs/usage.md, and SKILLS.md to name the general
+   rule, with the equals-form (--flag=--help) explicitly called out as
+   unaffected. Added a new t/ test asserting the broadened doc wording
+   plus a direct behavioral check on _argv_requests_help/_argv_requests_version
+   using --script/--browser (not --data), mirroring D2B-138's own test
+   pattern. No code change - the pre-parse scan itself remains a separate,
+   deliberate design decision (D2B-096/D2B-124/D2B-138). Found by a
+   fork-hunt during D2B-139's pipeline-continuity gate (D2B-140)
+
+0.119 2026-09-21
+ - fixed a real, currently-latent defensive gap: Browser::CLI's main() and main_search() both called encode_json($result) directly for their final successful-result formatting, OUTSIDE the eval wrapper _run_and_report_errors already provides for the executor call itself - every other failure path in this file goes through _sanitize_error() and this project's consistent exit-code-2 convention, but this one final formatting step was unprotected. encode_json can itself die (e.g. on a circular reference, live-verified via a throwaway perl -MJSON::PP invocation), and that die would have propagated uncaught from main()/main_search(), breaking this codebase's own clean-error convention with a raw internal Perl/JSON::PP message and exit 255 instead. Extracted a shared _print_json_result_or_report_error helper that wraps encode_json in its own eval and routes any failure through the same _sanitize_error/exit-2 path, used by both main() and main_search(). This is currently unreachable with today's result shapes (Browser::Runner/Browser::Search never produce circular structures), so no live crash was being fixed - closing a genuine inconsistency before it could ever matter, exactly analogous to this session's own D2B-133/134/135 chain. Full TDD cycle (red/green - the red test forces main()'s runner to return a genuinely circular result, and main_search()'s underlying execute_search is locally overridden to return one too, since Browser::Search's own public API has no way to inject a circular parsed result; a regression-guard block confirms a normal, encodable result is completely unaffected). Found by a scheduled hunt targeting cli/ wrappers and CLI.pm's error-handling consistency (D2B-139)
+
+0.118 2026-09-21
+ - documented a narrow, real edge case: browser.post --data --help/--data --version, passed as two SEPARATE arguments, is misinterpreted as a help/version request instead of being sent as the literal POST body, because Browser::CLI's pre-parse --help/--version detection scans the whole raw argument list for a standalone matching element before Getopt::Long ever assigns --data its value - a deliberate, already-documented design (D2B-096/D2B-124) favoring reliable --help/--version detection even alongside a broken sibling flag. The combined equals-form (--data=--help/--data=--version) is unaffected, since that's a single argv token rather than a standalone matching element - a distinction a code-review round caught was missing from the first documentation draft, which overclaimed the limitation applied to --data=--help too. Added a clarifying, correctly-scoped note to README.md, docs/usage.md, and SKILLS.md's --data documentation, plus a new t/ test that both checks the doc wording and directly exercises _argv_requests_help/_argv_requests_version to confirm the space-form/equals-form distinction behaviorally, not just in prose. No code behavior changed - changing the pre-parse scanning logic itself is a real design decision deserving its own deliberate ticket if ever revisited. Found by a scheduled hunt (D2B-138)
+
+0.117 2026-09-21
+ - fixed a real doc gap: browser.post's --data was never documented as going out with no Content-Type header explicitly set - _run_post always sends it as a raw string with no headers option of its own, and this skill has no --header flag anywhere for a caller to set one themselves. Every documented --data example ('--data name=dashboard') visually resembles a form submission, which could mislead a reader into assuming form-encoding happens automatically; a server that relies on Content-Type to parse the body may not interpret it as intended. Added a clarifying note to README.md, docs/usage.md, and SKILLS.md's --data documentation, plus a new t/ test asserting all three carry it. No code behavior changed - deliberately scoped as a doc fix rather than bundling in a request-behavior change (auto-setting Content-Type, or adding a --header flag), which is a real design decision deserving its own deliberate ticket. Found by a scheduled hunt (D2B-137)
+
+0.116 2026-09-21
+ - fixed a real doc bug in this same session's own D2B-131 work: README.md and docs/usage.md both said browser.png's --script return value "appears in the result... exactly as it does for browser.get/browser.post", implying dashboard browser.png's CLI output shows script_result the same way browser.get/browser.post's CLI output does. That's only true at the Perl API level (Browser::Runner->request()'s return hash) - Browser::CLI::main() only ever prints the saved screenshot's file path for PNG, never the full JSON result it prints for GET/POST, so script_result never reaches a CLI user for browser.png. This is deliberate, already-tested CLI behavior (t/01-cli.t), not something being changed here - only the doc wording was corrected to explicitly scope the parity claim to the Perl API and name the CLI as the place it doesn't hold. Added a new t/ test asserting both doc files carry that scoping. Found by a scheduled hunt (D2B-136)
+
+0.115 2026-09-21
+ - fixed a real bug introduced by D2B-134's own security hardening: since that fix started atomically reserving browser.png's default screenshot placeholder via File::Temp with UNLINK => 0, a failure anywhere after that reservation (script/jquery execution, or Playwright's own screenshot() call) left the empty placeholder file orphaned under the system tmpdir forever - UNLINK => 0 deliberately disables File::Temp's own automatic exit-time cleanup. _run_png now wraps every step after reservation - the --file-directory validation, make_path, script/jquery execution, and the screenshot() call itself - in one eval, and, only when it was the one that reserved the default path (never for an explicit --file, which this skill never deletes), unlinks it before re-dying. Full TDD cycle (red/green - a forced script failure confirms no orphaned browser-*.png file remains under tmpdir, and a parallel test confirms a pre-existing user-supplied --file survives a failure with its content untouched). 100% coverage on lib/Browser/Runner.pm. Found by a Codex code-review round deferred from D2B-134 (D2B-135)
+
+0.114 2026-09-21
+ - security hardening: browser.png's default screenshot path (no --file given) was previously only ever computed as a hash-derived string under the system tmpdir - it was never actually created by this process before Playwright's screenshot() call opened and wrote to it, leaving a window where another process (or an attacker able to predict the non-cryptographic time()/pid/rand() inputs) could pre-create a symlink or file at that exact path first. _screenshot_path's default branch now reserves the path atomically and exclusively via File::Temp::tempfile (O_CREAT|O_EXCL under the hood) before returning it, closing the initial name-prediction/pre-creation window - Playwright's screenshot() call still overwrites the reserved placeholder file exactly as before. This does not eliminate every theoretical race (a same-UID actor could still unlink-and-replace the reserved file between this process's close() and Playwright's later open()), but it does close the specific gap this ticket targeted: a bare computed pathname that was never actually created by this process at all. The random component's own character set changed from strictly hex (from the old SHA-256-derived name) to File::Temp's own alphanumeric set; the existing filename-shape test was updated to match. Full TDD cycle (red/green). 100% coverage on lib/Browser/Runner.pm. Found by a Codex code-review round during D2B-133 (D2B-134)
+
+0.113 2026-09-21
+ - cleanup: _screenshot_path's default-filename entropy join included a stray anonymous empty hashref literal ({}) alongside time(), $$, and rand() - it stringified to a raw memory address with no comment or test explaining why it was there, reading like an accidental leftover rather than a deliberate entropy choice. Removed it and added a comment naming the three genuine entropy sources that remain. No intended API or filename-format behavior change - the generated filename's own value will differ from before (its SHA-256 input changed), but its shape (browser-[A-Fa-f0-9]{16}.png) and everything downstream that depends on it are unaffected, and the existing filename-shape test still passes unchanged. Found by a scheduled hunt (D2B-133)
+
+0.112 2026-09-21
+ - fixed a real doc bug: SKILLS.md's own "Result payload shape" section listed PNG's response fields without script_result, even though D2B-131 (this same session) added script_result to browser.png's result hash when --script is given - the GET/POST line immediately above it already listed script_result for the identical field, so PNG's line was stale relative to code this same session had just shipped. Added a t/ assertion that checks SKILLS.md's own PNG line for script_result, closing the gap that let this drift silently in the first place (nothing previously verified SKILLS.md's payload-shape claims against actual behavior). Found by a scheduled hunt immediately after D2B-131, independently live-verified (D2B-132)
+
+0.111 2026-09-21
+ - fixed a real bug: browser.png silently accepted --script and --jquery but never ran them - _run_png never called _interact_and_run_script the way _run_get and _run_post both do, so a script (e.g. to dismiss a cookie banner or scroll to an element before capturing) or jQuery injection had no effect at all, with no error or warning. _run_png now calls _interact_and_run_script before taking the screenshot, mirroring browser.get/browser.post exactly, and includes script_result in the PNG result when --script is given - a --script/--jquery failure (a JS error, or a missing jQuery runtime) now causes browser.png to fail with that error too, exactly as browser.get/browser.post already do, whereas before it could never fail this way since the options were never actually run. Following a code-review round, --file's own existing-directory validation was kept ahead of the script/jquery step, so a bad --file still fails fast without ever running a script's real side effects against the page. Full TDD cycle (red/green - new tests confirm the script actually runs against the page and jQuery is actually injected before the screenshot, using the same fake-page evaluation/script-tag tracking the GET/POST tests already use). 100% coverage on lib/Browser/Runner.pm. Found by a scheduled hunt, independently live-verified before ticketing, including confirming no existing test or doc explained the silent no-op as intentional (D2B-131)
+
+0.110 2026-09-21
+ - investigated a suspected dead-code branch: a scheduled hunt flagged _parse_results' by-name fallback dispatch (bing/google/duckduckgo string matching, below its primary $engine->{parser} dispatch) as unreachable, having traced only search()'s own default-engine fallback and Browser::CLI::execute_search's %by_name map, both of which always supply a parser coderef. That conclusion was wrong: the fallback is deliberate, documented backward compatibility added in D2B-070 for any external caller of the module's own search(engines => [...]) that hand-builds an engine hash without a parser key (or passes a bare engine-name string) - already proven reachable and intentional by t/22-d2b-026-search-fallback-and-parsing.t and t/63-d2b-063-064-070-search-fixes.t's own "legacy dispatch" test, both of which still pass unchanged. No code behavior was changed; added a clarifying comment above the fallback in lib/Browser/Search.pm and a new confirming test so a future hunt looking only at production call sites doesn't re-reach the same incorrect conclusion. Found by a scheduled hunt (D2B-130)
+
+0.109 2026-09-21
+ - fixed a real bug: _run_quiet_command (used to stage/install Node dependencies via npx/npm) could permanently leave the real STDOUT handle discarded if the STDOUT redirect succeeded but the subsequent STDERR redirect then failed and died - every later `print` to STDOUT in that process would silently write into a tempfile that File::Temp's UNLINK => 1 goes on to delete, instead of reaching the user's terminal, until the process exits (STDERR itself was unaffected in this specific failure path, since it was never actually redirected). The redirect-and-run sequence now runs inside its own eval, and on that failure path the real STDOUT/STDERR are restored before the original error is re-died, mirroring the existing eval/capture/restore-then-rethrow pattern already used in this file (_with_node_runtime_lock's flock-release, _install_node_runtime's chdir-restore). Following a code-review round, the two restores were also made independent of each other via a new _restore_std_handle helper: a STDOUT restore failure no longer skips the STDERR restore attempt, and either restore failing now surfaces its own error to the caller instead of being silently lost. Full TDD cycle (red/green - the red test forces the STDERR redirect to fail via a child-process test that overrides the internal tempfile() call, since reproducing this safely means deliberately breaking a real process's STDOUT/STDERR, which cannot be done in the main test process without corrupting its own TAP output). 100% coverage on lib/Browser/Runner/NodeRuntime.pm. Found by a scheduled hunt, independently live-verified before ticketing (D2B-129)
+
+0.108 2026-09-21
+ - investigated a real disk-hygiene gap: _clear_installed_node_modules never clears a module directory left over from a dependency later removed from package.json, so it would accumulate indefinitely under $HOME/node_modules (currently latent, since this skill's own dependency set has never shrunk). A first fix (clearing every entry actually present, not just current-spec ones) was caught by Codex review as unsafe: $HOME/node_modules is the user's real home directory, not one this skill exclusively owns, so that approach could destroy an unrelated node_modules tree a user keeps there for something else entirely. Reverted to the original, safe, current-spec-only clearing and documented this as a known, accepted limitation rather than a bug being fixed - a genuinely safe fix would need a persisted install-history manifest, which is a larger change out of scope here. No behavior change shipped; only documentation/comments added explaining the trade-off. Found by a scheduled hunt (D2B-128)
+
+0.107 2026-09-21
+ - browser.search's --engine (singular) flag now trims leading/trailing ASCII whitespace and the literal UTF-8 non-breaking-space byte sequence, the same way --engines' list-parsing already did (D2B-086) - a copy-pasted or accidentally-padded single --engine value was previously rejected as unknown while the identical padded name given via --engines was correctly trimmed and accepted. A Codex review round caught a consistency gap in the initial fix: a whitespace-only --engine value trimmed to empty and fell through to a generic, blank "Unknown engine: " error instead of the specific "named no engine(s) at all" refusal --engines already gives for the equivalent all-empty case - --engine now gives the same specific refusal. Found by a scheduled hourly bug hunt, independently live-verified before ticketing (D2B-127)
+
+0.106 2026-09-21
+ - _browser_candidates now falls back to standard Windows Chrome/Chromium install locations (Program Files, Program Files (x86), and LOCALAPPDATA) after PATH lookup, mirroring the macOS/non-Windows absolute-path fallback that already existed - Chrome/Chromium's Windows installers typically don't add themselves to PATH, so Windows users without CHROMIUM_BIN set previously had no fallback safety net and would silently get Playwright's bundled browser instead of their real Chrome. Two Codex documentation-review rounds caught 4 real issues across the initial draft, all fixed: README's "if PATH lookup finds nothing" wording implied the fallback list was conditionally built when it's actually always constructed; README also overclaimed the non-Windows fallback as macOS-specific when it structurally runs on any non-Windows platform (harmlessly, since every candidate still goes through the same launchability check); Program Files (x86) was missing entirely (no 32-bit Windows install coverage); and an unset PROGRAMFILES/PROGRAMFILES(X86)/LOCALAPPDATA would have silently produced a nonsensical relative-path candidate instead of being skipped - the Windows candidate loop was restructured to skip a root entirely when its env var is unset, and the same fix was applied to the pre-existing macOS $HOME-relative candidates for consistency (a 3rd Codex review round caught this identical symmetric gap). Full TDD cycle (red/green), 100% coverage on lib/Browser/Runner/BrowserPath.pm. Found by a scheduled improvement hunt (D2B-126)
+
+0.105 2026-09-21
+ - replace execute()'s hand-maintained ternary chain (mapping wait_until/timeout_ms to their hyphenated flag names in @flag_guards error messages) with a generic tr/_/-/ derivation - a pure, behavior-preserving refactor: every existing flag-guard error message is byte-for-byte identical, and a future guard added with a new underscored option name is now automatically hyphenated correctly with no per-guard maintenance required. 100% coverage on lib/Browser/CLI.pm maintained with zero new tests needed. Found by an owner-requested enhancement hunt (D2B-125)
+
+0.104 2026-09-21
+ - add a --version flag to browser.get/browser.post/browser.png/browser.search, mirroring --help's own top-priority pre-parse short-circuit (D2B-096) exactly - --help still wins when both are given. Prints the version from .env (located via the already-existing Browser::Runner::NodeRuntime::_skill_root() path resolution) and exits 0; a missing/unreadable .env fails clearly naming the file rather than printing an empty or wrong version. Full TDD cycle (red/green), 100% coverage on lib/Browser/CLI.pm. Found by an owner-requested enhancement hunt (D2B-124)
+
+0.103 2026-09-21
+ - consolidate the identical eval/error/help-printing block Browser::CLI::main and main_search each maintained independently into one shared _run_and_report_errors helper - a pure, behavior-preserving refactor: every existing test (help, errors, all 4 commands' success paths) passes unchanged, and lib/Browser/CLI.pm keeps 100% statement+subroutine coverage with zero new tests needed. Found by an owner-requested enhancement hunt (D2B-123)
+
+0.102 2026-09-21
+ - add a worked example to docs/usage.md's Controller Mode section showing a Perl loop that pages through several results pages, collecting each page's title before clicking "next" - using only the already-documented $page/select/click controller-mode primitives, no new API surface. Notes explicitly that any wait-for-navigation strategy between clicks is inherently site-specific rather than prescribed by the controller-mode API. Found by an owner-requested enhancement hunt (D2B-122)
+
+0.101 2026-09-21
+ - add a worked example to docs/usage.md's Search Mode section showing the most common real workflow: run browser.search, extract a result's url with jq, then pass it to browser.get to fetch the actual page - both commands were already separately documented but never shown composed together. Found by an owner-requested enhancement hunt (D2B-121)
+
+0.100 2026-09-21
+ - t/20-d2b-024-package-json-single-read.t no longer attempts a real npx/npm install - it now pre-populates a package.json inside each node_modules/<module> fixture directory it creates (matching the pattern t/04-runner-unit.t already uses), so the runtime genuinely reports as current and the ~9s of real subprocess overhead this test used to add (unrelated to what it actually verifies) is gone; it now completes in well under a second. The read-count assertion was correspondingly updated from 1 to 2, since the shared PACKAGE_JSON_READ_COUNT counter also now legitimately counts the one dependency (express) actually being checked - no file is read twice either way, which is what the counter is really guarding against. Found by an owner-requested enhancement hunt (D2B-120)
+
+0.99 2026-09-21
+ - _run_quiet_command (used to stage/install Node dependencies via npx/npm) now captures stdout/stderr to temp files instead of devnull, and on failure includes the real exit code plus the captured output in its die message - previously it discarded everything and died with just the bare command line, giving no way to diagnose why an npm/npx install actually failed short of reproducing it manually outside the skill. Success remains silent as before, with no leftover temp files. Full TDD cycle (red/green - caught and fixed a self-defeating first draft of the red test that trivially matched the literal command-line text instead of genuinely-captured runtime output, and a genuine regression in an unrelated structural-contract test, t/34-d2b-034-dead-code-removed.t, whose regex needed updating for the new code shape). 100% coverage on lib/Browser/Runner/NodeRuntime.pm. Found by an owner-requested enhancement hunt (D2B-119)
+
+0.98 2026-09-21
+ - warn to STDERR, naming the rejected path, when CHROMIUM_BIN is set but fails the browser-usability check - lib/Browser/Runner/BrowserPath.pm's _validated_browser_path previously silently fell back to Playwright's own bundled browser with zero diagnostic, so a deliberately-misconfigured CHROMIUM_BIN was invisible until its downstream symptom (an unexpected browser type/behavior) was noticed. CHROMIUM_BIN unset (normal PATH auto-detection) or usable (accepted as before) still produce no warning; a Codex QA-gate review round correctly caught and fixed an initial draft's wording that mistakenly called the rejection-path fallback "auto-detection" when it is actually Playwright's bundled browser (auto-detection only runs when CHROMIUM_BIN was never set). Full TDD cycle (red/green), 100% coverage on lib/Browser/Runner/BrowserPath.pm. Found by an owner-requested enhancement hunt (D2B-118)
+
+0.97 2026-09-21
+ - add NAME/SYNOPSIS/EXIT STATUS POD to cli/get, cli/post, cli/png, and cli/search, mirroring cli/skills's existing POD style - the four primary CLI entrypoints had none, so 'perldoc cli/get' (etc.) returned nothing unlike cli/skills. POD points to SKILLS.md/`dashboard browser.skills` for the full flag reference rather than duplicating it. No argument-parsing or runtime behavior change. Found by an owner-requested enhancement hunt (D2B-117)
+
+0.96 2026-09-21
+ - add SKILLS.md to README.md's Documentation section - the condensed, agent-facing manual (added D2B-097, also printed verbatim by `dashboard browser.skills`) was never listed there, so a reader following README's own pointers to further reading had no path to it. Found by an owner-requested enhancement hunt, also satisfying a doc-accuracy hunt (D2B-116)
+
+0.95 2026-09-21
+ - browser.png's payload now also exposes content_type and the full response headers map, matching GET/POST's shape (D2B-114) - lib/Browser/Runner.pm's _run_png already had the navigation response object in scope but never called ->headers() on it. The headers extraction is placed after the existing --file/existing-directory guard (D2B-109) rather than at the top of the function, so a directory-conflict die still fires before touching the response object, matching the guard's original fail-fast intent. Full TDD cycle (red/green), 100% coverage on lib/Browser/Runner.pm. Found by an owner-requested enhancement hunt (D2B-115)
+
+0.94 2026-09-21
+ - browser.get/browser.post payloads now expose the full response headers map under a new `headers` key, alongside the existing `content_type` key (unchanged for backward compatibility) - lib/Browser/Runner.pm's _run_get/_run_post both already fetched the complete Playwright response headers hash but previously discarded everything except content-type, so callers had no way to read set-cookie, location, or other custom response headers. Full TDD cycle (red/green), 100% coverage on lib/Browser/Runner.pm. Found by an owner-requested enhancement hunt (D2B-114)
+
+0.93 2026-09-20
+ - add /.test-tmp to .gitignore, matching the already-gitignored /cover_db - the workspace's own documented coverage-gate cleanup step (~/projects/skills/CLAUDE.md's `rm -rf cover_db .test-tmp`) names both, and this repo's own tests never actually create a .test-tmp directory (they use File::Temp's own OS-managed temp dirs instead), but excluding it preventively keeps this skill consistent with the documented convention other skills in the workspace may rely on. Found by an owner-requested enhancement hunt (D2B-113)
+
+0.92 2026-09-19
+ - add D2B-107/108/109's dash-prefixed-argument and --file-directory gotchas to SKILLS.md's Known, disclosed limitations section - the condensed agent manual said nothing about them even though README.md/docs/usage.md already document all three, so an agent relying on SKILLS.md alone would hit them unwarned. Found by JOB-005 doc-accuracy hunt while verifying D2B-107/108/109's cross-document consistency (D2B-110)
+
+0.91 2026-09-19
+ - fix browser.png's --file silently attempting to write a screenshot to an existing directory path when that path happened to already end in '.png' (_screenshot_path only appends the suffix if the path doesn't already end in it, so an existing directory named e.g. 'shot.png' passed through unchanged) - _run_png now dies with a clear "--file points at an existing directory" error naming the path before ever reaching Playwright's screenshot() call, the same "fail fast with a clear Perl error" fix class as D2B-057/D2B-095. Full TDD cycle (red/green) with a new regression test. Found by JOB-003 hourly bug hunt via adversarial tracing of --file/--data (D2B-109)
+
+0.90 2026-09-19
+ - document that browser.search's query argument starting with a literal '-' (e.g. '-test query') is misparsed by Getopt::Long as an unknown option, the same bug class as D2B-107 but for the query instead of the URL (D2B-107's own scope explicitly excluded browser.search) - the standard '--' end-of-options separator already works around this (live-verified), so this is a documentation-only fix, not a parsing change. Found by JOB-003 hourly bug hunt via adversarial tracing of Browser::CLI::execute_search (D2B-108)
+
+0.89 2026-09-19
+ - document that a URL argument starting with a literal '-' (e.g. '-example.com') is misparsed by Getopt::Long as an unknown option - the standard '--' end-of-options separator already works around this (live-verified), so this is a documentation-only fix, not a parsing change. Real-world impact is low since DNS domain labels cannot begin with a hyphen. Found by JOB-003 hourly bug hunt via adversarial tracing of Browser::CLI::execute (D2B-107)
+
 0.88 2026-09-19
  - fix tickets/DD-020.md and tickets/DD-033.md referencing the wrong path 'skills/browser/' instead of 'skills/browser/CODE/' - same path-drift pattern D2B-098 fixed in tickets/TESTING.md; the actual source code lives one level deeper. Lower severity since these are historical, already-closed ticket records rather than live copy-pasteable commands. Found by JOB-005 doc-accuracy hunt (D2B-106)
 

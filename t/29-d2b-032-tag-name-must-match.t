@@ -8,13 +8,19 @@ use Browser::Runner;
 
 # D2B-032 originally fixed _response_document's fragment-detection
 # regex accepting ANY opening tag paired with ANY closing tag, never
-# checking the tag names actually match. D2B-079 later removed the
-# entire tag-shape trust path (a hand-rolled scanner cannot safely
-# replicate HTML5's implicit tag-closing rules, so it was itself a
-# script-injection bypass) - a body with no explicit text/html
-# content-type is now always escaped/wrapped, regardless of whether
-# its tags happen to match. These cases are kept as regression
-# coverage for that end state.
+# checking the tag names actually match. D2B-079 later removed that
+# fragment-shape trust path entirely (a hand-rolled scanner cannot
+# safely replicate HTML5's implicit tag-closing rules, so it was
+# itself a script-injection bypass) - a fragment body (one that does
+# NOT itself start with a boundary-checked <!doctype html>/<html>
+# tag) with no explicit text/html content-type is now always
+# escaped/wrapped, regardless of whether its tags happen to match.
+# These cases are kept as regression coverage for that end state.
+# D2B-174: this is narrower than it may read - a body that DOES start
+# with a real <html>/<!doctype html> tag still bypasses wrapping
+# under any content-type (README.md edge case 6, pinned separately in
+# t/174-d2b-174-html-tag-prefix-bypass.t) - only fragment-shaped
+# bodies like the ones below are unconditionally wrapped.
 
 {
     my $mismatched = '<div>text</span>';

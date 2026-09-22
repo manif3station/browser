@@ -10,7 +10,7 @@ use Test::More;
 use lib 'lib';
 use Browser::Runner;
 
-# D2B-038: _skill_root's cwd heuristic trusts any current directory that
+# D2B-038: skill_root()'s cwd heuristic trusts any current directory that
 # merely has both a 'cli' and 'lib' subdirectory, with no check that it's
 # actually this skill's root. A coincidental match (e.g. an unrelated
 # project directory that happens to have both dirs for its own reasons)
@@ -25,11 +25,11 @@ my $cwd = getcwd();
 chdir $decoy_root or die "Unable to chdir to decoy root: $!";
 
 local $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT};
-my $resolved = Browser::Runner::NodeRuntime::_skill_root();
+my $resolved = Browser::Runner::NodeRuntime::skill_root();
 
 chdir $cwd or die "Unable to restore cwd after decoy-root test: $!";
 
-isnt( $resolved, $decoy_root, '_skill_root does not false-positive to a decoy directory that merely has empty cli/ and lib/ subdirs' );
-ok( -f File::Spec->catfile( $resolved, 'lib', 'Browser', 'CLI.pm' ), '_skill_root instead resolves to a directory that actually contains lib/Browser/CLI.pm' );
+isnt( $resolved, $decoy_root, 'skill_root() does not false-positive to a decoy directory that merely has empty cli/ and lib/ subdirs' );
+ok( -f File::Spec->catfile( $resolved, 'lib', 'Browser', 'CLI.pm' ), 'skill_root() instead resolves to a directory that actually contains lib/Browser/CLI.pm' );
 
 done_testing();

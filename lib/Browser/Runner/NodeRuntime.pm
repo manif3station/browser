@@ -12,13 +12,15 @@ use File::Copy qw(copy);
 use File::Find ();
 use File::Path qw(remove_tree);
 use File::Spec;
-use File::Temp qw(tempdir);
+use File::Temp qw(tempdir tempfile);
 use JSON::PP ();
+
+use Browser::Runner::VersionCompare ();
 
 my %PACKAGE_JSON_CACHE;
 
 sub _ensure_node_runtime {
-    my $skill_root = _skill_root();
+    my $skill_root = skill_root();
     my $home_root = $ENV{HOME} || die 'HOME is required for browser skill Node dependencies';
     my $package_json = File::Spec->catfile( $skill_root, 'package.json' );
     die "Missing package.json in $skill_root" if !-f $package_json;
@@ -58,9 +60,18 @@ sub _ensure_node_runtime {
     return $node_modules;
 }
 
+# D2B-179: this file repeated $args{X} || die "X is required" 12
+# times across 3 distinct argument names (home_root x7, package_json
+# x4, module x1) - this shared helper centralizes that guard, so
+# every call site now shares one place to change the message format.
+sub _required_arg {
+    my ( $args, $name ) = @_;
+    return $args->{$name} || die "$name is required";
+}
+
 sub _node_runtime_lock_path {
     my (%args) = @_;
-    my $home_root = $args{home_root} || die 'home_root is required';
+    my $home_root = _required_arg( \%args, 'home_root' );
     return File::Spec->catfile( $home_root, '.developer-dashboard', 'cache', 'browser-skill-node-runtime.lock' );
 }
 
@@ -137,8 +148,8 @@ sub _package_json_fingerprint {
 
 sub _node_runtime_is_current {
     my (%args) = @_;
-    my $home_root = $args{home_root} || die 'home_root is required';
-    my $package_json = $args{package_json} || die 'package_json is required';
+    my $home_root = _required_arg( \%args, 'home_root' );
+    my $package_json = _required_arg( \%args, 'package_json' );
     my $fingerprint = $args{fingerprint} || _package_json_fingerprint($package_json);
     my $node_modules = File::Spec->catdir( $home_root, 'node_modules' );
 
@@ -163,8 +174,8 @@ sub _required_node_modules {
 
 sub _install_node_runtime {
     my (%args) = @_;
-    my $home_root = $args{home_root} || die 'home_root is required';
-    my $package_json = $args{package_json} || die 'package_json is required';
+    my $home_root = _required_arg( \%args, 'home_root' );
+    my $package_json = _required_arg( \%args, 'package_json' );
     my @specs = _package_json_dependency_specs($package_json);
     return 1 if !@specs;
 
@@ -203,11 +214,29 @@ sub _install_node_runtime {
 
 sub _clear_installed_node_modules {
     my (%args) = @_;
-    my $home_root = $args{home_root} || die 'home_root is required';
-    my $package_json = $args{package_json} || die 'package_json is required';
+    my $home_root = _required_arg( \%args, 'home_root' );
+    my $package_json = _required_arg( \%args, 'package_json' );
     my %specs = _package_json_dependency_map($package_json);
     my $target_root = File::Spec->catdir( $home_root, 'node_modules' );
 
+    # D2B-128 (investigated, not fixed as originally proposed): a
+    # module directory from a dependency later removed from
+    # package.json is never cleared by this loop and would survive
+    # indefinitely - currently latent, since this skill's own
+    # dependency set has never shrunk. A first attempt fixed this by
+    # clearing every entry actually present under $target_root instead
+    # of only the ones still in %specs, but $home_root is literally
+    # $ENV{HOME} (see _ensure_node_runtime) - a real user's actual home
+    # directory, not a directory this skill exclusively owns - so that
+    # "clear everything" approach could destroy an unrelated
+    # node_modules tree a user happens to keep directly under their own
+    # $HOME for something else entirely. A genuinely safe fix needs a
+    # persisted manifest of every module name this skill has ever
+    # installed (not just the current spec) to know what is safe to
+    # remove without guessing - out of scope for this ticket. Left as
+    # a known, accepted limitation rather than shipping a fix whose
+    # risk (arbitrary user data loss) is worse than the bug it solves
+    # (a few stale MB under node_modules).
     for my $module ( sort keys %specs ) {
         my $path = File::Spec->catdir( $target_root, $module );
         next if !-e $path;
@@ -219,8 +248,8 @@ sub _clear_installed_node_modules {
 
 sub _installed_modules_satisfy_package_json {
     my (%args) = @_;
-    my $home_root = $args{home_root} || die 'home_root is required';
-    my $package_json = $args{package_json} || die 'package_json is required';
+    my $home_root = _required_arg( \%args, 'home_root' );
+    my $package_json = _required_arg( \%args, 'package_json' );
     my %specs = _package_json_dependency_map($package_json);
 
     for my $module ( sort keys %specs ) {
@@ -229,7 +258,7 @@ sub _installed_modules_satisfy_package_json {
             module    => $module,
         );
         return 0 if !defined $installed;
-        return 0 if !_version_satisfies_spec( $installed, $specs{$module} );
+        return 0 if !Browser::Runner::VersionCompare::version_satisfies_spec( $installed, $specs{$module} );
     }
 
     return 1;
@@ -251,56 +280,11 @@ sub _package_json_dependency_map {
 
 sub _installed_node_module_version {
     my (%args) = @_;
-    my $home_root = $args{home_root} || die 'home_root is required';
-    my $module = $args{module} || die 'module is required';
+    my $home_root = _required_arg( \%args, 'home_root' );
+    my $module = _required_arg( \%args, 'module' );
     my $package_json = File::Spec->catfile( $home_root, 'node_modules', $module, 'package.json' );
     return if !-f $package_json;
     return _read_package_json($package_json)->{decoded}{version};
-}
-
-sub _version_satisfies_spec {
-    my ( $installed, $spec ) = @_;
-    return 0 if !defined $installed || !defined $spec || $installed eq q{} || $spec eq q{};
-    return 1 if $spec eq '*' || $spec eq 'latest';
-    if ( $spec !~ /^\^/ ) {
-        return $installed eq $spec if $spec =~ /^[0-9]+\.[0-9]+\.[0-9]+\z/;
-        die "Unsupported version spec: $spec (expected an exact version, '*', 'latest', or a caret range like ^1.2.3)";
-    }
-
-    my $minimum = substr $spec, 1;
-    return 0 if $installed =~ /-/ && $installed !~ /\A\Q$minimum\E\z/;
-    my @installed = _version_parts($installed);
-    my @minimum   = _version_parts($minimum);
-    return 0 if !@installed || !@minimum;
-    return 0 if $installed[0] != $minimum[0];
-
-    if ( $minimum[0] == 0 ) {
-        if ( $minimum[1] == 0 ) {
-            return $installed[1] == $minimum[1] && $installed[2] == $minimum[2] ? 1 : 0;
-        }
-        return 0 if $installed[1] != $minimum[1];
-    }
-
-    return _compare_version_parts( \@installed, \@minimum ) >= 0 ? 1 : 0;
-}
-
-sub _version_parts {
-    my ($value) = @_;
-    return if !defined $value;
-    my ($numeric) = $value =~ /\A([0-9]+(?:\.[0-9]+){0,2})/;
-    return if !defined $numeric;
-    my @parts = split /\./, $numeric;
-    push @parts, 0 while @parts < 3;
-    return @parts[ 0 .. 2 ];
-}
-
-sub _compare_version_parts {
-    my ( $left, $right ) = @_;
-    for my $idx ( 0 .. 2 ) {
-        my $cmp = ( $left->[$idx] || 0 ) <=> ( $right->[$idx] || 0 );
-        return $cmp if $cmp != 0;
-    }
-    return 0;
 }
 
 # Portable replacement for shelling out to Unix 'cp -R', which does not
@@ -356,7 +340,7 @@ sub _make_path_if_missing {
 
 sub _node_runtime_stamp_path {
     my (%args) = @_;
-    my $home_root = $args{home_root} || die 'home_root is required';
+    my $home_root = _required_arg( \%args, 'home_root' );
     return File::Spec->catfile( $home_root, '.developer-dashboard', 'cache', 'browser-skill-node-runtime.sha256' );
 }
 
@@ -382,7 +366,10 @@ sub _write_node_runtime_stamp {
     return 1;
 }
 
-sub _skill_root {
+# D2B-154: public (not underscore-prefixed) since Browser::CLI, a
+# standalone module outside this module's own dependency-install flow,
+# reuses it to resolve .env's path for --version.
+sub skill_root {
     return $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT} if $ENV{DEVELOPER_DASHBOARD_SKILL_ROOT};
     return getcwd()
       if -d File::Spec->catdir( getcwd(), 'cli' )
@@ -417,23 +404,62 @@ sub _check_node_version {
     return 1;
 }
 
+sub _restore_std_handle {
+    my ( $glob_ref, $saved_fh, $label ) = @_;
+    open $glob_ref, '>&', $saved_fh or die "Unable to restore $label: $!";
+    return 1;
+}
+
 sub _run_quiet_command {
     my (@command) = @_;
     open my $stdout_save, '>&', \*STDOUT or die "Unable to save STDOUT: $!";
     open my $stderr_save, '>&', \*STDERR or die "Unable to save STDERR: $!";
-    open my $null_fh, '>', File::Spec->devnull() or die "Unable to open devnull: $!";
 
-    open STDOUT, '>&', $null_fh or die "Unable to redirect STDOUT: $!";
-    open STDERR, '>&', $null_fh or die "Unable to redirect STDERR: $!";
+    my ( $stdout_fh, $stdout_path ) = tempfile( UNLINK => 1 );
+    my ( $stderr_fh, $stderr_path ) = tempfile( UNLINK => 1 );
 
-    my $ok = system(@command) == 0;
-    my $exit = $? >> 8;
+    # D2B-129: redirect-and-run runs inside eval so a mid-sequence failure
+    # still reaches the restore below instead of stranding real STDOUT/STDERR.
+    my ( $ok, $exit );
+    my $run_ok = eval {
+        open STDOUT, '>&', $stdout_fh or die "Unable to redirect STDOUT: $!";
+        open STDERR, '>&', $stderr_fh or die "Unable to redirect STDERR: $!";
 
-    open STDOUT, '>&', $stdout_save or die "Unable to restore STDOUT: $!";
-    open STDERR, '>&', $stderr_save or die "Unable to restore STDERR: $!";
+        $ok   = system(@command) == 0;
+        $exit = $? >> 8;
+        1;
+    };
+    my $redirect_error = $@;
 
-    die "Command failed: @command" if !$ok;
+    # Restores run independently, so a STDOUT restore failure doesn't skip
+    # the STDERR restore attempt.
+    my @restore_errors;
+    for my $pair ( [ \*STDOUT, $stdout_save, 'STDOUT' ], [ \*STDERR, $stderr_save, 'STDERR' ] ) {
+        eval { _restore_std_handle( @{$pair} ); 1 } or push @restore_errors, $@;
+    }
+
+    if ( !$run_ok ) { unlink $stdout_path, $stderr_path; die $redirect_error; }
+    if (@restore_errors) { unlink $stdout_path, $stderr_path; die join( q{}, @restore_errors ); }
+
+    if ( !$ok ) {
+        my $captured_stdout = _slurp_captured_output($stdout_path);
+        my $captured_stderr = _slurp_captured_output($stderr_path);
+        unlink $stdout_path, $stderr_path;
+        die "Command failed: @command (exit code $exit)\n"
+          . "captured stdout:\n$captured_stdout\n"
+          . "captured stderr:\n$captured_stderr\n";
+    }
+    unlink $stdout_path, $stderr_path;
     return $exit;
+}
+
+sub _slurp_captured_output {
+    my ($path) = @_;
+    open my $fh, '<', $path or return q{};
+    local $/;
+    my $content = <$fh>;
+    close $fh;
+    return defined $content ? $content : q{};
 }
 
 1;

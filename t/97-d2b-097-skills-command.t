@@ -30,4 +30,15 @@ my $exit   = $? >> 8;
 is( $exit, 0, 'cli/skills exits 0' );
 is( $actual, $expected, "cli/skills' stdout matches SKILLS.md's file contents exactly" );
 
+# D2B-132: SKILLS.md's own "Result payload shape" section must list
+# script_result for PNG, matching what _run_png actually returns since
+# D2B-131 - this line previously went stale relative to the code because
+# nothing checked SKILLS.md's payload-shape claims against the fields a
+# request actually returns.
+like(
+    $expected,
+    qr/PNG:(?:(?!Search:).)*script_result/s,
+    'SKILLS.md documents script_result as part of PNG\'s result payload shape (D2B-132)'
+);
+
 done_testing();

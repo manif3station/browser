@@ -8,3 +8,22 @@ use lib "$Bin/../lib";
 use Browser::CLI ();
 
 exit Browser::CLI::main( method => 'POST', argv => \@ARGV );
+
+__END__
+
+=head1 NAME
+
+browser.post - Submit a POST request with Playwright and print the response payload as JSON
+
+=head1 SYNOPSIS
+
+  dashboard browser.post <url> [OPTIONS]
+
+See SKILLS.md (or C<dashboard browser.skills>) for the full flag reference
+and result payload shape.
+
+=head1 EXIT STATUS
+
+C<0> on success; C<2> on a usage error or an unhandled request failure.
+
+=cut

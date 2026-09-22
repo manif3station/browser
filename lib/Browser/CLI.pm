@@ -3,35 +3,68 @@ package Browser::CLI;
 use strict;
 use warnings;
 
+use File::Spec;
 use Getopt::Long qw(GetOptionsFromArray);
 use JSON::PP qw(encode_json);
 
 use Browser::Runner;
+use Browser::Runner::NodeRuntime ();
 use Browser::Search ();
+
+# D2B-123: shared by main()/main_search() - both eval their own executor,
+# report a sanitized error (exit 2) or print pre-rendered help (exit 0)
+# identically; only the final successful-result formatting differs
+# between callers, so that part stays in each caller instead of here.
+sub _run_and_report_errors {
+    my ( $executor, $output_fh, $error_fh, %args ) = @_;
+    my $result = eval { $executor->(%args) };
+    if ( my $error = $@ ) {
+        print {$error_fh} sanitize_error($error), "\n";
+        return ( 2, undef );
+    }
+
+    if ( ref $result eq 'HASH' && $result->{help} ) {
+        print {$output_fh} $result->{usage};
+        return ( 0, undef );
+    }
+
+    if ( ref $result eq 'HASH' && $result->{version} ) {
+        print {$output_fh} $result->{version_string}, "\n";
+        return ( 0, undef );
+    }
+
+    return ( undef, $result );
+}
+
+# D2B-139: shared by main()/main_search() - encode_json can itself die
+# (e.g. on a circular structure), and that failure must go through the
+# same sanitize_error()/exit-2 convention as every other failure in
+# this file, not propagate uncaught.
+sub _print_json_result_or_report_error {
+    my ( $result, $output_fh, $error_fh ) = @_;
+    my $json = eval { encode_json($result) };
+    if ( my $error = $@ ) {
+        print {$error_fh} sanitize_error($error), "\n";
+        return 2;
+    }
+    print {$output_fh} $json, "\n";
+    return 0;
+}
 
 sub main {
     my (%args) = @_;
     my $output_fh = $args{output_fh} || \*STDOUT;
     my $error_fh  = $args{error_fh}  || \*STDERR;
 
-    my $result = eval { execute(%args) };
-    if ( my $error = $@ ) {
-        print {$error_fh} _sanitize_error($error), "\n";
-        return 2;
-    }
-
-    if ( ref $result eq 'HASH' && $result->{help} ) {
-        print {$output_fh} $result->{usage};
-        return 0;
-    }
+    my ( $exit_code, $result ) = _run_and_report_errors( \&execute, $output_fh, $error_fh, %args );
+    return $exit_code if defined $exit_code;
 
     if ( uc( $args{method} || q{} ) eq 'PNG' ) {
         print {$output_fh} $result->{file}, "\n";
         return 0;
     }
 
-    print {$output_fh} encode_json($result), "\n";
-    return 0;
+    return _print_json_result_or_report_error( $result, $output_fh, $error_fh );
 }
 
 # D2B-096: --help was never a declared option on any of the four
@@ -57,6 +90,7 @@ Usage: $verb URL [OPTIONS]
   --timeout-ms N          Navigation timeout in milliseconds (browser.get/browser.png only)
   --file PATH             Screenshot destination path (browser.png only)
   --help                  Print this usage text and exit
+  --version               Print the installed skill's version and exit
 USAGE
 }
 
@@ -69,14 +103,38 @@ Usage: browser.search QUERY [OPTIONS]
   --max N                 Maximum results to return (default 10)
   --timeout-ms N          Per-engine request timeout in milliseconds
   --help                  Print this usage text and exit
+  --version               Print the installed skill's version and exit
 USAGE
 }
 
-sub _sanitize_error {
+# D2B-147: public (not underscore-prefixed) since cli/skills, a
+# standalone script outside this module's own main()/execute() flow,
+# reuses it to match the same exit-2 error convention.
+sub sanitize_error {
     my ($error) = @_;
     chomp $error;
     $error =~ s{\s+at\s+\S+\s+line\s+\d+\.\z}{};
     return $error;
+}
+
+# D2B-086: Perl's \s only matches ASCII whitespace, so a copy-pasted
+# engine name padded with a non-breaking space survived this trim and
+# was rejected as unknown. @ARGV arrives as raw, undecoded bytes (this
+# codebase never decodes argv as UTF-8), so a non-breaking space
+# typed/pasted as UTF-8 is the two-byte sequence \xC2\xA0, not the
+# single decoded U+00A0 character - the regex must match that literal
+# byte sequence, not \x{A0}, or it only strips the trailing byte and
+# leaves a mangled \xC2 behind.
+# D2B-127: this trim was only ever applied to --engines' list-parsing,
+# never to the singular --engine value, so the identical padded-name
+# rejection D2B-086 fixed for one flag still happened on the other -
+# applying the same regex to both closes that gap.
+# D2B-151: the regex was duplicated verbatim in both call sites -
+# extracted here so a future revision only needs one place to change.
+sub _trim_engine_name {
+    my ($name) = @_;
+    $name =~ s/\A(?:\s|\xC2\xA0)+|(?:\s|\xC2\xA0)+\z//g;
+    return $name;
 }
 
 # D2B-096 (Codex review round 1): --help must take priority over EVERY
@@ -91,6 +149,33 @@ sub _argv_requests_help {
     return !!grep { $_ eq '--help' } @$argv;
 }
 
+# D2B-124: --version mirrors --help's own top-priority, pre-parse
+# short-circuit exactly (see D2B-096 above) - checked in execute()/
+# execute_search() right after the --help check, so --help still wins
+# when both are given, and a broken sibling flag can never suppress it.
+sub _argv_requests_version {
+    my ($argv) = @_;
+    return !!grep { $_ eq '--version' } @$argv;
+}
+
+# .env's VERSION line is the source of truth for the installed skill's
+# version. Browser::Runner::NodeRuntime::skill_root() (D2B-154: public)
+# already solves the exact path-resolution problem
+# (DEVELOPER_DASHBOARD_SKILL_ROOT env var, then cwd-based detection, then
+# module-path fallback) this needs - reused here rather than duplicated.
+sub _read_version {
+    my $env_path = File::Spec->catfile( Browser::Runner::NodeRuntime::skill_root(), '.env' );
+    open my $fh, '<', $env_path or die "Unable to read $env_path: $!";
+    my ($version_line) = grep { /^VERSION=/ } <$fh>;
+    close $fh;
+    die "No VERSION line found in $env_path" if !defined $version_line;
+    chomp $version_line;
+    $version_line =~ s/\r\z//;
+    $version_line =~ s/^VERSION=//;
+    die "VERSION line in $env_path is empty" if $version_line eq q{};
+    return $version_line;
+}
+
 sub execute {
     my (%args) = @_;
     my @argv = @{ $args{argv} || [] };
@@ -98,6 +183,7 @@ sub execute {
     die "Unsupported method: $method" if $method ne 'GET' && $method ne 'POST' && $method ne 'PNG';
 
     return { help => 1, usage => _usage_get_post_png($method) } if _argv_requests_help( \@argv );
+    return { version => 1, version_string => _read_version() } if _argv_requests_version( \@argv );
 
     my %options = (
         browser    => 'chrome',
@@ -123,10 +209,10 @@ sub execute {
             'file=s'       => \$options{file},
         );
     };
-    die "Invalid options: " . _sanitize_error( join q{}, @getopt_warnings ) if !$getopt_ok;
+    die "Invalid options: " . sanitize_error( join q{}, @getopt_warnings ) if !$getopt_ok;
 
     my $url = shift @argv;
-    die "Missing URL" if !defined $url || $url eq q{};
+    die "Missing URL" if !defined $url || $url =~ /\A\s*\z/;
     die "Unexpected arguments: @argv" if @argv;
 
     die "--timeout-ms must not be negative"
@@ -140,7 +226,7 @@ sub execute {
     );
     for my $guard (@flag_guards) {
         my ( $key, $reader, $blocked ) = @$guard;
-        my $flag = $key eq 'wait_until' ? 'wait-until' : $key eq 'timeout_ms' ? 'timeout-ms' : $key;
+        ( my $flag = $key ) =~ tr/_/-/;
         die "--$flag is only read by $reader - it has no effect on $method"
           if defined $options{$key} && $blocked->($method);
     }
@@ -173,19 +259,10 @@ sub main_search {
     my $output_fh = $args{output_fh} || \*STDOUT;
     my $error_fh  = $args{error_fh}  || \*STDERR;
 
-    my $result = eval { execute_search(%args) };
-    if ( my $error = $@ ) {
-        print {$error_fh} _sanitize_error($error), "\n";
-        return 2;
-    }
+    my ( $exit_code, $result ) = _run_and_report_errors( \&execute_search, $output_fh, $error_fh, %args );
+    return $exit_code if defined $exit_code;
 
-    if ( ref $result eq 'HASH' && $result->{help} ) {
-        print {$output_fh} $result->{usage};
-        return 0;
-    }
-
-    print {$output_fh} encode_json($result), "\n";
-    return 0;
+    return _print_json_result_or_report_error( $result, $output_fh, $error_fh );
 }
 
 sub execute_search {
@@ -193,6 +270,7 @@ sub execute_search {
     my @argv = @{ $args{argv} || [] };
 
     return { help => 1, usage => _usage_search() } if _argv_requests_help( \@argv );
+    return { version => 1, version_string => _read_version() } if _argv_requests_version( \@argv );
 
     my %options = ( max => 10 );
     my @getopt_warnings;
@@ -206,7 +284,7 @@ sub execute_search {
             'timeout-ms=i' => \$options{timeout_ms},
         );
     };
-    die "Invalid options: " . _sanitize_error( join q{}, @getopt_warnings ) if !$getopt_ok;
+    die "Invalid options: " . sanitize_error( join q{}, @getopt_warnings ) if !$getopt_ok;
 
     my $query = shift @argv;
     die "Missing query" if !defined $query || $query =~ /\A\s*\z/;
@@ -221,23 +299,22 @@ sub execute_search {
       if defined $options{engine} && defined $options{engines};
 
     my @requested_names;
-    push @requested_names, $options{engine} if defined $options{engine};
-    # D2B-086: Perl's \s only matches ASCII whitespace, so a
-    # copy-pasted engine name padded with a non-breaking space
-    # survived this trim and was rejected as unknown. @ARGV arrives as
-    # raw, undecoded bytes (this codebase never decodes argv as
-    # UTF-8), so a non-breaking space typed/pasted as UTF-8 is the
-    # two-byte sequence \xC2\xA0, not the single decoded U+00A0
-    # character - the regex must match that literal byte sequence,
-    # not \x{A0}, or it only strips the trailing byte and leaves a
-    # mangled \xC2 behind.
-    push @requested_names, grep { $_ ne q{} } map { s/\A(?:\s|\xC2\xA0)+|(?:\s|\xC2\xA0)+\z//g; $_ } split /,/, $options{engines} if defined $options{engines};
+    if ( defined $options{engine} ) {
+        my $trimmed = _trim_engine_name( $options{engine} );
+        # A whitespace-only --engine value trims to empty - refuse it
+        # with the same specific message --engines already gives an
+        # all-empty list, rather than falling through to the generic
+        # "Unknown engine: " lookup failure with a blank name.
+        die "--engine named no engine at all" if $trimmed eq q{};
+        push @requested_names, $trimmed;
+    }
+    push @requested_names, grep { $_ ne q{} } map { _trim_engine_name($_) } split /,/, $options{engines} if defined $options{engines};
 
     die "--engines named no engines at all" if defined $options{engines} && !@requested_names;
 
     my @engines;
     if (@requested_names) {
-        my %by_name = map { lc( $_->{name} ) => $_ } Browser::Search::_default_engines();
+        my %by_name = map { lc( $_->{name} ) => $_ } Browser::Search::default_engines();
         my %seen;
         for my $name (@requested_names) {
             my $key = lc $name;
