@@ -112,6 +112,7 @@ dashboard browser.get https://example.com/start --flow --script 'my $response = 
 dashboard browser.post https://example.com/form --data 'name=dashboard'
 dashboard browser.get https://example.com --no-headless
 dashboard browser.get --help
+dashboard browser.get https://example.com -o table
 ```
 
 `--help` prints usage text and exits 0 for any of `browser.get`/`browser.post`/`browser.png`/`browser.search`, taking priority over every other flag or validation - it works even with no URL/query given, and even combined with other flags. `browser.skills` prints this skill's `SKILLS.md` agent manual.
@@ -121,6 +122,8 @@ dashboard browser.get --help
 `--data` is sent as the raw POST body - this skill never explicitly sets a `Content-Type` header for it, and there is no `--header` flag to set one yourself. A server that relies on `Content-Type` to parse the body (e.g. expecting `application/x-www-form-urlencoded` for form-style data like `--data 'name=dashboard'`) may not interpret it as intended; confirm the target server accepts the body this skill actually sends before relying on `--data` for that use case (D2B-137). Passing `--data --help` or `--data --version` as two separate arguments (not `--data='--help'`/`--data='--version'` as one combined argument) is misinterpreted as a help/version request instead of sending `--help`/`--version` as the literal POST body - `--help`/`--version` are detected by scanning the whole argument list for a standalone matching element before any flag value is parsed, so the equals-form (`--data=--help`) is unaffected (D2B-138). This is not specific to `--data`: the same whole-argument-list scan runs before any flag's value is parsed, so passing `--help`/`--version` as the separate-token value of every string-valued flag, wherever supported across the four commands (`--script`, `--browser`, `--wait-until`, `--file`, `--engine`, `--engines`, and `--data` itself), is misinterpreted the same way - only the equals-form (`--flag=--help`) is safe (D2B-140).
 
 `browser.get`/`browser.post`/`browser.png` all run headless by default; pass `--headless`/`--no-headless` to set it explicitly, useful for debugging what a run is actually doing without using `--ask`'s interactive pause-and-confirm flow. `--ask`/`--askme` unconditionally force headless off for their interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect on a non-interactive run.
+
+`browser.get`/`browser.post`/`browser.search` accept `-o`/`--output` (D2B-208), matching this workspace's own DD skill CLI output contract: `json` (the default, unchanged from every prior version - decodes to the identical structure, though not guaranteed byte-identical since JSON key order was never a stable guarantee across separate result instances either) or `table`, a new human-readable summary that intentionally omits `body`/`body_text`/`headers` (use `-o json` for those). `browser.png`/`browser.pdf` don't accept `-o` at all - out of this flag's scope, since they already print just the destination file path - passing it there is refused the same way any other unsupported flag is. `--help`/`--version` still take priority over a malformed `-o` value, exactly like every other flag (D2B-096).
 
 Direct local development:
 
@@ -509,6 +512,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 36. The `--` end-of-options escape from items 31/32 is itself honored even when the escaped positional value is literally `--help` or `--version` - `dashboard browser.get -- --version` treats `--version` as the literal URL rather than a version request, and `dashboard browser.search -- --help` treats `--help` as the literal query rather than a help request (D2B-186).
 37. `--browser edge` launches Microsoft Edge via Playwright's `channel: 'msedge'` launch option rather than an `executablePath` - unlike `chrome`/`chromium`, it never inherits `CHROMIUM_BIN` or a PATH/direct-location-detected binary, even when one is configured (D2B-192).
 38. `browser.pdf` is refused with a clear error naming the Chromium-only restriction when `--browser firefox`/`webkit` is requested, before a browser is ever launched - Playwright's PDF export (Chromium DevTools' `printToPDF`) has no Firefox/WebKit support at all (D2B-196).
+39. `browser.get`/`browser.post`/`browser.search`'s `-o`/`--output` (D2B-208) defaults to `json` (unchanged) and accepts `table` as a new opt-in summary; `browser.png`/`browser.pdf` don't accept `-o` at all and refuse it as an unrecognized option, since they already print just the destination file path and this flag was deliberately scoped to only the three JSON-returning commands.
 
 ## Continuous Integration
 

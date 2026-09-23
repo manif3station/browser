@@ -106,6 +106,21 @@ succeeds. If every engine is walled, fails with a structured error naming
 each one, with a default 10s per-engine bound - see the `--timeout-ms 0`
 caveat above for the one way this can still hang.
 
+## Output format (browser.get/post/search)
+
+- `-o json` (default) — unchanged raw JSON payload, exactly as always.
+- `-o table` — a new, opt-in human-readable summary (D2B-208): key
+  fields only (`method`, `requested_url`, `final_url`, `status`,
+  `content_type`, `is_captcha`, and `title` for GET; `query`/
+  `engine_used`/`engines_tried`/result count plus a numbered list for
+  search) - `body`/`body_text`/`headers` are intentionally omitted, use
+  `-o json` for the full payload. `--output=table` (equals-form) also
+  works. `browser.png`/`browser.pdf` don't accept `-o` at all (out of
+  scope for this flag - they already print just the destination file
+  path) - it's refused the same way any other unsupported flag is.
+  `--help`/`--version` still win over a malformed `-o` value, exactly
+  like every other flag (D2B-096).
+
 ## Result payload shape
 
 GET/POST: `requested_url`, `final_url`, `method`, `status`, `title` (GET

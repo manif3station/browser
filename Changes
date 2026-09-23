@@ -1,5 +1,31 @@
 Revision history for browser
 
+0.175 2026-09-23
+ - (D2B-208) browser.get/browser.post/browser.search never had an -o/
+   --output flag at all, deviating from this workspace's own
+   documented DD skill CLI output contract ("default output is a
+   human-readable summary (pretty table); -o json emits the full
+   underlying payload"). Found by a deliberate cross-check against
+   that convention, not the usual per-file doc-drift class. Added
+   -o/--output accepting json (kept as the default, decodes to the
+   same structure as before this ticket - no behavior change for any
+   existing caller/1055 tests) and table (new opt-in human-readable
+   summary, omitting body/body_text/headers by design - use -o json
+   for the full payload). browser.png/browser.pdf are unaffected
+   (out of this ticket's own documented scope) and correctly refuse
+   -o as an unrecognized option, same as any other unsupported flag.
+   Codex round 1 caught a genuine regression in the first
+   implementation: a malformed --output value wrongly won over
+   --help/--version instead of respecting D2B-096's established
+   "help/version always wins" priority - fixed by checking for
+   --help/--version first, with its own new regression tests; round 2
+   caught a coverage gap (browser.search's --version branch had no
+   test of its own); round 3 PASS. New test t/208-d2b-208-output-
+   format-flag.t (27 assertions), including live-verified red-then-
+   green for the priority fix itself (temporarily reverted just the
+   order-check, confirmed the new tests failed exactly as predicted,
+   restored).
+
 0.174 2026-09-23
  - (D2B-207) .gitignore was missing an entry for .pax/, a machine-
    local generated PAR-packing metadata directory (manifest.json

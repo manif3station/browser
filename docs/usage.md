@@ -61,6 +61,22 @@ Example GET payload shape:
 {"requested_url":"https://www.google.com","final_url":"https://www.google.com/","method":"GET","status":200,"title":"Google","content_type":"text/html; charset=utf-8","headers":{"content-type":"text/html; charset=utf-8","set-cookie":"..."},"body":"<!DOCTYPE html>...","body_text":"Google Search ...","is_captcha":false}
 ```
 
+`browser.get`/`browser.post`/`browser.search` accept `-o`/`--output` (D2B-208): `json` (the default shown above, unchanged) or `table`, a new opt-in human-readable summary matching this workspace's own DD skill CLI output contract:
+
+```text
+dashboard browser.get https://www.google.com -o table
+
+method         GET
+requested_url  https://www.google.com
+final_url      https://www.google.com/
+status         200
+content_type   text/html; charset=utf-8
+is_captcha     no
+title          Google
+```
+
+`-o table` intentionally omits `body`/`body_text`/`headers` - it is a *summary*, matching the workspace convention's own distinction between the default view and `-o json`'s full underlying payload; use `-o json` when the full payload is actually needed. `browser.png`/`browser.pdf` don't accept `-o` at all (they already print just the destination file path, which is out of this flag's scope) - passing it there is refused as an unrecognized option. `--help`/`--version` still take priority over a malformed `-o` value.
+
 The skill declares its Node-side dependencies in `package.json`, matching the DD skill dependency contract. DD installs that file with:
 
 ```bash

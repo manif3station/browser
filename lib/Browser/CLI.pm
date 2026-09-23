@@ -55,16 +55,128 @@ sub main {
     my (%args) = @_;
     my $output_fh = $args{output_fh} || \*STDOUT;
     my $error_fh  = $args{error_fh}  || \*STDERR;
+    my $method    = uc( $args{method} || q{} );
+
+    # D2B-208: -o/--output is only wired up for GET/POST here - PNG/PDF
+    # keep printing just the destination file path (out of this
+    # ticket's scope, see its own scope.excluded), so -o on those two
+    # falls straight through to execute()'s own GetOptionsFromArray,
+    # which refuses it as an unrecognized option, same as any other
+    # flag those two commands don't support.
+    #
+    # Codex review round 1: --help/--version must keep winning over a
+    # malformed sibling flag (D2B-096) even when that sibling is this
+    # new --output - checked first here, exactly mirroring execute()'s
+    # own pre-Getopt::Long scan, so a broken --output can never
+    # suppress --help/--version the way D2B-096 already guarantees for
+    # every other flag.
+    my $format = 'json';
+    if ( ( $method eq 'GET' || $method eq 'POST' )
+        && !_argv_requests_help( $args{argv} || [] )
+        && !_argv_requests_version( $args{argv} || [] ) )
+    {
+        my $filtered_argv;
+        ( $format, $filtered_argv ) = eval { _extract_output_format( $args{argv} || [] ) };
+        if ( my $error = $@ ) {
+            print {$error_fh} sanitize_error($error), "\n";
+            return 2;
+        }
+        $args{argv} = $filtered_argv;
+    }
 
     my ( $exit_code, $result ) = _run_and_report_errors( \&execute, $output_fh, $error_fh, %args );
     return $exit_code if defined $exit_code;
 
-    if ( uc( $args{method} || q{} ) eq 'PNG' || uc( $args{method} || q{} ) eq 'PDF' ) {
+    if ( $method eq 'PNG' || $method eq 'PDF' ) {
         print {$output_fh} $result->{file}, "\n";
         return 0;
     }
 
-    return _print_json_result_or_report_error( $result, $output_fh, $error_fh );
+    return $format eq 'table'
+      ? _print_table_result( $method, $result, $output_fh )
+      : _print_json_result_or_report_error( $result, $output_fh, $error_fh );
+}
+
+# D2B-208: this workspace's own DD skill CLI output contract
+# (~/projects/skills/CLAUDE.md) documents "default output is a
+# human-readable summary (pretty table); -o json emits the full
+# underlying payload" - this skill's commands never had an -o flag at
+# all. -o/--output is pre-scanned here and stripped from argv before
+# it ever reaches execute()/execute_search()'s own GetOptionsFromArray
+# call, the same architecture --help/--version already use above (see
+# _argv_requests_help/_argv_requests_version) - keeping this a pure
+# CLI-presentation-layer concern that never has to flow through
+# execute()'s existing return-value contract, which is also used
+# directly by other callers per this skill's own README ("at the Perl
+# API level"). json is kept as the default (byte-identical to every
+# existing caller's current behavior, including this suite's own
+# 1000+ assertions) rather than flipping the default to table, since
+# that would be a breaking change to every existing consumer of this
+# skill's JSON output - table is added as a new opt-in instead.
+sub _extract_output_format {
+    my ($argv) = @_;
+    my @remaining;
+    my $format;
+    my $i = 0;
+    while ( $i <= $#$argv ) {
+        my $tok = $argv->[$i];
+        if ( $tok eq '--' ) {
+            push @remaining, @{$argv}[ $i .. $#$argv ];
+            last;
+        }
+        if ( $tok eq '-o' || $tok eq '--output' ) {
+            die "--output requires a value (json or table)\n" if $i == $#$argv;
+            $format = $argv->[ $i + 1 ];
+            $i += 2;
+            next;
+        }
+        if ( $tok =~ /\A--output=(.*)\z/s ) {
+            $format = $1;
+            $i += 1;
+            next;
+        }
+        push @remaining, $tok;
+        $i += 1;
+    }
+    $format = 'json' if !defined $format;
+    die "Unsupported output format: $format (expected json or table)\n"
+      if $format ne 'json' && $format ne 'table';
+    return ( $format, \@remaining );
+}
+
+# D2B-208: intentionally a summary, not the full payload - body/
+# body_text/headers are omitted here exactly as the workspace's own
+# convention distinguishes a table summary from -o json's full
+# underlying payload; get the full detail from -o json instead.
+sub _print_table_result {
+    my ( $method, $result, $output_fh ) = @_;
+    my @rows = (
+        [ method        => $result->{method} ],
+        [ requested_url => $result->{requested_url} ],
+        [ final_url     => $result->{final_url} ],
+        [ status        => $result->{status} ],
+        [ content_type  => $result->{content_type} ],
+        [ is_captcha    => $result->{is_captcha} ? 'yes' : 'no' ],
+    );
+    push @rows, [ title => $result->{title} ] if $method eq 'GET';
+    push @rows, [ script_result => 'yes (see -o json for the value)' ] if defined $result->{script_result};
+    print {$output_fh} _render_field_table( \@rows );
+    return 0;
+}
+
+sub _render_field_table {
+    my ($rows) = @_;
+    my $label_width = 0;
+    for my $row (@$rows) {
+        $label_width = length( $row->[0] ) if length( $row->[0] ) > $label_width;
+    }
+    my $text = q{};
+    for my $row (@$rows) {
+        my ( $label, $value ) = @$row;
+        $value = q{} if !defined $value;
+        $text .= sprintf "%-*s  %s\n", $label_width, $label, $value;
+    }
+    return $text;
 }
 
 # D2B-096: --help was never a declared option on any of the four
@@ -73,6 +185,10 @@ sub main {
 sub _usage_get_post_png {
     my ($method) = @_;
     my $verb = $method eq 'GET' ? 'browser.get' : $method eq 'POST' ? 'browser.post' : $method eq 'PNG' ? 'browser.png' : 'browser.pdf';
+    my $output_line = ( $method eq 'GET' || $method eq 'POST' )
+      ? "  -o, --output FORMAT     json (default, unchanged payload) or table (D2B-208, a human-\n"
+      . "                          readable summary - see docs/usage.md; not available on browser.png/browser.pdf)\n"
+      : q{};
     return <<USAGE;
 Usage: $verb URL [OPTIONS]
 
@@ -90,7 +206,7 @@ Usage: $verb URL [OPTIONS]
   --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png/browser.pdf only)
   --timeout-ms N          Navigation timeout in milliseconds (browser.get/browser.png/browser.pdf only)
   --file PATH             Screenshot/PDF destination path (browser.png/browser.pdf only)
-  --help                  Print this usage text and exit
+${output_line}  --help                  Print this usage text and exit
   --version               Print the installed skill's version and exit
 USAGE
 }
@@ -103,6 +219,8 @@ Usage: browser.search QUERY [OPTIONS]
   --engines LIST          Try these engines in order, comma-separated (cannot combine with --engine)
   --max N                 Maximum results to return (default 10)
   --timeout-ms N          Per-engine request timeout in milliseconds
+  -o, --output FORMAT     json (default, unchanged payload) or table (D2B-208, a human-
+                          readable summary - see docs/usage.md)
   --help                  Print this usage text and exit
   --version               Print the installed skill's version and exit
 USAGE
@@ -279,10 +397,40 @@ sub main_search {
     my $output_fh = $args{output_fh} || \*STDOUT;
     my $error_fh  = $args{error_fh}  || \*STDERR;
 
+    # Codex review round 1: same D2B-096 priority fix as main() above -
+    # --help/--version must win over a malformed --output here too.
+    my $format = 'json';
+    if ( !_argv_requests_help( $args{argv} || [] ) && !_argv_requests_version( $args{argv} || [] ) ) {
+        my $filtered_argv;
+        ( $format, $filtered_argv ) = eval { _extract_output_format( $args{argv} || [] ) };
+        if ( my $error = $@ ) {
+            print {$error_fh} sanitize_error($error), "\n";
+            return 2;
+        }
+        $args{argv} = $filtered_argv;
+    }
+
     my ( $exit_code, $result ) = _run_and_report_errors( \&execute_search, $output_fh, $error_fh, %args );
     return $exit_code if defined $exit_code;
 
-    return _print_json_result_or_report_error( $result, $output_fh, $error_fh );
+    return $format eq 'table'
+      ? _print_search_table_result( $result, $output_fh )
+      : _print_json_result_or_report_error( $result, $output_fh, $error_fh );
+}
+
+sub _print_search_table_result {
+    my ( $result, $output_fh ) = @_;
+    my @rows = (
+        [ query         => $result->{query} ],
+        [ engine_used   => $result->{engine_used} ],
+        [ engines_tried => join( ', ', @{ $result->{engines_tried} || [] } ) ],
+        [ result_count  => scalar @{ $result->{results} || [] } ],
+    );
+    print {$output_fh} _render_field_table( \@rows );
+    for my $item ( @{ $result->{results} || [] } ) {
+        print {$output_fh} sprintf( "  %d. %s\n     %s\n", $item->{rank}, $item->{title}, $item->{url} );
+    }
+    return 0;
 }
 
 sub execute_search {
