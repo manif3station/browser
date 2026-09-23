@@ -1,5 +1,30 @@
 Revision history for browser
 
+0.171 2026-09-23
+ - (D2B-204, live-verified) removed macos-13 entirely from
+   .github/workflows/cross-platform.yml's os matrix. Its jobs queued
+   with zero progress for 4+ hours across 5 separate real workflow
+   runs this session, while macos-latest (Apple Silicon) on those same
+   runs always completed within 1-3 minutes - a GitHub-hosted macOS
+   Intel runner capacity issue on this account, not a code defect.
+   Owner decision (2026-09-23, asked directly after 4+ hours of zero
+   progress): drop macos-13 rather than let it block the platform-test
+   gate indefinitely, trading theoretical Intel-mac coverage for a gate
+   that actually completes. macOS coverage continues through
+   macos-latest alone. t/193's assertions updated to match (added a
+   macos-13-absent check and a macos-13-exclusion-documented check;
+   also fixed a pre-existing staleness defect Codex caught in the same
+   pass - the SKIP block's count was 5 when it actually guards 7
+   assertions). Codex documentation-accuracy review round 1 FAIL (the
+   stale SKIP count, plus stale intro-comment wording found in a later
+   pass) -> fixed -> round 2 PASS. Local Docker access remained
+   blocked by an unrelated system-wide infra issue throughout
+   (confirmed via Codex's own separate invocation hitting the
+   identical block, its own test-suite attempts stopping before any
+   test ran), so verification used python3 YAML/structural checks
+   against the workflow file and manual regex replication of t/193's
+   own assertions as a substitute for an actual in-Docker suite run.
+
 0.170 2026-09-23
  - (D2B-203, live-verified) removed windows-latest entirely from
    .github/workflows/cross-platform.yml's os matrix. D2B-202's

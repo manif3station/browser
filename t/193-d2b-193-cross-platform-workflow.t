@@ -9,8 +9,9 @@ use YAML::XS qw(LoadFile);
 # platform - every existing test that touches Browser::Runner injects a
 # mock playwright_factory. This asserts the new cross-platform.yml
 # workflow file exists and its job matrix covers the required OS list
-# and the currently-supported (non-edge) browser types, with Windows
-# arm64 explicitly excluded and documented, rather than silently missing.
+# and every currently-supported browser type (including edge), with
+# windows-latest and macos-13 explicitly excluded and documented,
+# rather than silently missing.
 #
 # This is a structural test on the workflow YAML's shape, not a live
 # GitHub Actions run - actually executing the workflow requires pushing
@@ -25,7 +26,7 @@ my $workflow = eval { LoadFile($workflow_path) };
 ok( !$@, 'cross-platform.yml parses as valid YAML' ) or diag("Parse error: $@");
 
 SKIP: {
-    skip 'workflow file missing or unparseable', 5 if !$workflow;
+    skip 'workflow file missing or unparseable', 7 if !$workflow;
 
     ok( exists $workflow->{jobs}, 'workflow defines at least one job' );
 
@@ -38,6 +39,12 @@ SKIP: {
 
     ok( ( grep { /ubuntu/i } @os_list ), 'matrix os list includes a Linux runner' );
     ok( ( grep { /macos/i } @os_list ),  'matrix os list includes a macOS runner' );
+    # D2B-204: macos-13 removed entirely - its jobs queued with zero
+    # progress for 4+ hours across 5 separate real workflow runs this
+    # session, a GitHub-hosted macOS Intel runner capacity issue on
+    # this account, while macos-latest (Apple Silicon) always
+    # completed within minutes on the same runs.
+    ok( !( grep { /macos-13/i } @os_list ), 'matrix os list no longer includes macos-13 (D2B-204)' );
     # D2B-203: windows-latest removed entirely - the CPAN Playwright
     # module's own documented-experimental Windows support fails to
     # spawn its Node driver reliably on this runner (a separate,
@@ -67,6 +74,11 @@ like(
     $raw_yaml,
     qr/windows-latest.{0,200}(excluded|playwright-perl)/is,
     'the workflow documents, in a comment, why windows-latest is excluded entirely (D2B-203)'
+);
+like(
+    $raw_yaml,
+    qr/macos-13.{0,200}(queue|capacity)/is,
+    'the workflow documents, in a comment, why macos-13 is excluded entirely (D2B-204)'
 );
 unlike(
     $raw_yaml,

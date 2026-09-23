@@ -6,8 +6,16 @@
 # os covers amd64+arm64 for Linux and macOS via distinct GitHub-hosted
 # runner labels (arch is baked into the label, not a separate matrix
 # dimension): ubuntu-latest (amd64), ubuntu-24.04-arm (arm64),
-# macos-latest (arm64, Apple Silicon by default), macos-13 (amd64,
-# Intel).
+# macos-latest (arm64, Apple Silicon by default).
+#
+# D2B-204: macos-13 (amd64, Intel) is excluded entirely. Its jobs
+# queued with zero progress for 4+ hours across 5 separate real runs
+# this session, while macos-latest on those same runs always completed
+# within minutes - a GitHub-hosted macOS Intel runner capacity issue on
+# this account, not a code defect. Owner decision (asked directly after
+# 4+ hours of zero progress): drop macos-13 rather than let it block
+# the platform-test gate indefinitely, trading theoretical Intel-mac
+# coverage for a gate that actually completes.
 #
 # D2B-203: windows-latest is excluded entirely. D2B-202 fixed its
 # Clone.xs ABI mismatch (distribution: strawberry, still present below
@@ -38,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
         browser: [chrome, chromium, edge, firefox, webkit]
         exclude:
           - os: ubuntu-24.04-arm
