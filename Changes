@@ -1,5 +1,17 @@
 Revision history for browser
 
+0.174 2026-09-23
+ - (D2B-207) .gitignore was missing an entry for .pax/, a machine-
+   local generated PAR-packing metadata directory (manifest.json
+   references paths under ~/perl5/lib/perl5/.../Developer-Dashboard/,
+   confirming it's produced by local d2/dashboard tooling, not this
+   skill's own source) - found by the scheduled JOB-004 improvement
+   hunt. Never tracked (confirmed via git ls-files .pax/, empty
+   before and after) but also never ignored, so it showed as
+   untracked noise in every git status check. Added /.pax to
+   .gitignore, alongside the existing similar entries for cover_db/
+   .test-tmp/perl5/local.
+
 0.173 2026-09-23
  - (D2B-206) cpanfile declared only 'requires Playwright' and
    'requires URI::Escape' - no test_requires stanza at all.
