@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It gives DD users a reusable way to drive a browser session from `dashboard browser.get`, `dashboard browser.post`, `dashboard browser.png`, and `dashboard browser.search` without dropping into ad-hoc scripts first, plus `dashboard browser.skills` to print the skill's own agent-facing manual.
+`browser` is a Developer Dashboard skill that exposes Playwright-backed browser work through skill CLI commands. It gives DD users a reusable way to drive a browser session from `dashboard browser.get`, `dashboard browser.post`, `dashboard browser.png`, `dashboard browser.pdf`, and `dashboard browser.search` without dropping into ad-hoc scripts first, plus `dashboard browser.skills` to print the skill's own agent-facing manual.
 
 ## Value
 
@@ -10,6 +10,7 @@ This skill brings browser automation into the DD skill system so a user can:
 
 - fetch and inspect a page through a real browser session
 - capture a rendered page screenshot to a predictable PNG path
+- capture a rendered page as a PDF to a predictable path (Chromium-based browsers only)
 - capture the rendered HTML body of that page from the CLI
 - capture readable page text and detect obvious CAPTCHA or bot-check pages
 - temporarily hand control to the user in a visible browser session when login or CAPTCHA completion is required
@@ -26,6 +27,7 @@ The skill ships:
 
 - `cli/get` and `cli/post` command entrypoints
 - `cli/png` screenshot entrypoint
+- `cli/pdf` PDF capture entrypoint
 - `cli/search` search entrypoint
 - `cli/skills` entrypoint that prints `SKILLS.md`, a condensed agent-facing manual
 - `lib/Browser/CLI.pm` for CLI parsing and output
