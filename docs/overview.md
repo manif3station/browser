@@ -30,7 +30,7 @@ The skill ships:
 - `cli/pdf` PDF capture entrypoint
 - `cli/search` search entrypoint
 - `cli/skills` entrypoint that prints `SKILLS.md`, a condensed agent-facing manual
-- `lib/Browser/CLI.pm` for CLI parsing and output
+- `lib/Browser/CLI.pm` for CLI parsing and output, with `lib/Browser/CLI/TableOutput.pm` (`-o table` rendering, D2B-208, extracted from CLI.pm to keep it under the 500-line guideline, D2B-216)
 - `lib/Browser/Runner.pm` for Playwright execution orchestration, with `lib/Browser/Runner/NodeRuntime.pm` (Node dependency version satisfaction, the shared install lock, and the runtime stamp file), `lib/Browser/Runner/NodeRuntime/Install.pm` (the npm-install workspace cluster - install, current-dependency-tree replacement, and the portable recursive copy - extracted from NodeRuntime.pm), `lib/Browser/Runner/BrowserPath.pm` (browser binary discovery/validation), `lib/Browser/Runner/VersionCompare.pm` (semver-subset comparison), and `lib/Browser/Runner/Capture.pm` (PNG/PDF file-output capture, with run_png/run_pdf both thin callers of one shared internal `_capture` helper) split out as focused modules
 - `lib/Browser/Search.pm` for the multi-engine fallback strategy and per-engine result parsing
 - dependency files for DD skill installation on Debian-family and macOS hosts

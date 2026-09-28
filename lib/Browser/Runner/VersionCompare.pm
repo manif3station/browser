@@ -24,9 +24,25 @@ sub version_satisfies_spec {
     return 0 if !@installed || !@minimum;
     return 0 if $installed[0] != $minimum[0];
 
+    # D2B-212: version_parts zero-pads any segment the spec text omitted,
+    # so it can't tell "^0.0" (patch OMITTED - npm widens it to "any
+    # 0.0.z") apart from "^0.0.0" (patch explicitly written as 0 - npm
+    # pins it exactly). The segment count must be read from the spec's
+    # own numeric prefix (the same one version_parts extracts, D2B-213)
+    # before that padding happens. A caret spec with an omitted MINOR
+    # (e.g. "^0" or "^1") is npm's broadest case - the major-match check
+    # just above is already the only requirement, so this returns once
+    # that check has passed, matching the existing (unchanged) major>=1
+    # behavior below for that same 1-segment case.
+    my $minimum_numeric = _numeric_prefix($minimum);
+    my $segment_count = defined $minimum_numeric ? scalar split /\./, $minimum_numeric : 3;
+    return 1 if $segment_count == 1;
+
     if ( $minimum[0] == 0 ) {
         if ( $minimum[1] == 0 ) {
-            return $installed[1] == $minimum[1] && $installed[2] == $minimum[2] ? 1 : 0;
+            return 0 if $installed[1] != $minimum[1];
+            return 1 if $segment_count == 2;
+            return $installed[2] == $minimum[2] ? 1 : 0;
         }
         return 0 if $installed[1] != $minimum[1];
     }
@@ -37,11 +53,21 @@ sub version_satisfies_spec {
 sub version_parts {
     my ($value) = @_;
     return if !defined $value;
-    my ($numeric) = $value =~ /\A([0-9]+(?:\.[0-9]+){0,2})/;
+    my $numeric = _numeric_prefix($value);
     return if !defined $numeric;
     my @parts = split /\./, $numeric;
     push @parts, 0 while @parts < 3;
     return @parts[ 0 .. 2 ];
+}
+
+# D2B-213: shared by version_parts and version_satisfies_spec's D2B-212
+# segment-count computation, both of which need the same "up to 3
+# leading dot-separated numeric segments" prefix - extracted so this
+# regex only needs to change in one place.
+sub _numeric_prefix {
+    my ($value) = @_;
+    my ($numeric) = $value =~ /\A([0-9]+(?:\.[0-9]+){0,2})/;
+    return $numeric;
 }
 
 sub compare_version_parts {

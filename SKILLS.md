@@ -181,6 +181,8 @@ D2B-196). Search:
 - `cli/get`, `cli/post`, `cli/png`, `cli/pdf`, `cli/search`, `cli/skills`
   — thin entrypoint scripts.
 - `lib/Browser/CLI.pm` — argument parsing and JSON/usage output.
+- `lib/Browser/CLI/TableOutput.pm` — `-o table` rendering (D2B-208),
+  extracted from CLI.pm once it crossed the 500-line guideline (D2B-216).
 - `lib/Browser/Runner.pm` — Playwright execution (GET/POST, controller
   mode, CAPTCHA detection, response-document trust boundary).
 - `lib/Browser/Runner/Capture.pm` — PNG/PDF full-page file-output capture
