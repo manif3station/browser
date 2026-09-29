@@ -1,3 +1,14 @@
+0.184 2026-09-30
+ - (D2B-234) t/150's repo-wide "non-zero" wording scan could pass
+   vacuously: a missing directory was skipped silently (`next if
+   !-d`) and nothing asserted any file was actually read, so an empty
+   scan looked identical to a clean one - the same class of weakness
+   D2B-232 found in t/177. The scan now lives in scan_for_non_zero(),
+   which reports the number of files read and any missing directories,
+   and t/150 asserts the count is above zero, that cli/ docs/ lib/ t/
+   all exist, and (against an empty temporary tree) that an empty scan
+   is detected. Test-only change, no lib/ code touched.
+
 0.183 2026-09-29
  - (D2B-233) correct the historical record: this file's version history
    has always had one gap, 0.63 -> 0.61, with 0.62 never assigned or
