@@ -1,3 +1,15 @@
+0.183 2026-09-29
+ - (D2B-233) correct the historical record: this file's version history
+   has always had one gap, 0.63 -> 0.61, with 0.62 never assigned or
+   explained. Found live during a JOB-003 hourly bug hunt. git
+   archaeology (git show fb2b735 -- Changes) confirms the gap was baked
+   in from the start: commit fb2b735 bulk-wrote entries 0.60 through
+   0.78 in one commit, and its own diff already jumps from +0.63
+   straight to +0.61 - there is no lost 0.62 entry to recover from git
+   history. No functional or documentation change beyond this note,
+   following D2B-094's own precedent for correcting a historical-record
+   anomaly with a new entry rather than rewriting past ones.
+
 0.182 2026-09-29
  - (D2B-232) t/177's docs/overview.md drift guard had two bugs found
    together. First, its glob never descended into a subdirectory, so
