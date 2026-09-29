@@ -1,3 +1,16 @@
+0.182 2026-09-29
+ - (D2B-232) t/177's docs/overview.md drift guard had two bugs found
+   together. First, its glob never descended into a subdirectory, so
+   lib/Browser/Runner/NodeRuntime/Install.pm (D2B-198) was invisible to
+   it. Second, and more serious: D2B-217's own "broadened to check both
+   directories" fix never actually worked - Perl's comma operator has
+   lower precedence than '=', so `my @x = (glob A), (glob B);` only
+   ever assigned A's matches to @x, silently discarding B in void
+   context. lib/Browser/CLI/*.pm's files (TableOutput.pm) were never
+   actually checked against docs/overview.md. Both fixed together:
+   every glob now lives inside one enclosing list, and each of
+   Runner/ and CLI/ is globbed one subdirectory level deeper too.
+
 0.181 2026-09-27
  - (D2B-217) t/177's docs/overview.md drift guard only globbed
    lib/Browser/Runner/*.pm, missing the identical drift class recurring
