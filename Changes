@@ -1,3 +1,17 @@
+0.192 2026-09-30
+ - (D2B-242) three documentation statements left wrong or misplaced by the
+   D2B-238..240 edits, found by JOB-005's doc-accuracy hunt and verified
+   against the files: the comment above Browser::CLI::_decode_argv_text
+   still said "Only these two positional values are decoded" although
+   five are (url, query, data, script, file); README item 41 said "Only
+   the positional URL and query are decoded", contradicting item 42
+   directly below it; and SKILLS.md's "--help/--version still win over a
+   malformed -o value" sentence, the tail of the "-o table" bullet, ended
+   up after the --data/--script/--file bullet that was inserted in front
+   of it. Corrected so all three state the same rule, and pinned by a new
+   t/242-d2b-242-decode-docs-consistent.t. Documentation and one code
+   comment only - no behavior change.
+
 0.191 2026-09-30
  - (D2B-241) DuckDuckGo search results returned DuckDuckGo's own redirect
    wrapper as the url instead of the real target page. Observed live from

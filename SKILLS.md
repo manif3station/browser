@@ -120,7 +120,8 @@ caveat above for the one way this can still hang.
   path) - it's refused the same way any other unsupported flag is.
   The table is written as UTF-8, like the json output, so accented or
   non-Latin titles print correctly with no `Wide character` warning
-  (D2B-238).
+  (D2B-238). `--help`/`--version` still win over a malformed `-o` value,
+  exactly like every other flag (D2B-096).
 - A non-ASCII URL or search query given on the command line is treated
   as UTF-8 text (D2B-239): `browser.search "café"` searches for `café`
   (`q=caf%C3%A9`) and the `query`/`requested_url` values echoed in json
@@ -132,8 +133,6 @@ caveat above for the one way this can still hang.
   `browser.pdf` is written as UTF-8. Other arguments (`--engine`,
   `--wait-until`, ...) are not decoded, so an error message that echoes
   one still shows exactly what you typed.
-  `--help`/`--version` still win over a malformed `-o` value, exactly
-  like every other flag (D2B-096).
 
 ## Result payload shape
 

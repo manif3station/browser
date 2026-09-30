@@ -180,11 +180,13 @@ sub sanitize_error {
 # takes character strings - uri_escape_utf8 in Browser::Search and the
 # json/table output all encode characters - so a non-ASCII URL or query
 # was encoded twice (q=caf%C3%83%C2%A9 for 'café') and the search engine
-# was asked for the wrong term. Only these two positional values are
-# decoded, deliberately not all of argv: decoding everything would put
-# characters into error messages that echo user text and would break the
-# byte-sequence match in _trim_engine_name. Anything that is not valid
-# UTF-8, or is already a character string, is returned unchanged.
+# was asked for the wrong term. The positional url and query are decoded
+# where they leave execute()/execute_search(), and (D2B-240) the data,
+# script and file option values at the call in execute() - deliberately
+# not all of argv: decoding everything would put characters into error
+# messages that echo user text and would break the byte-sequence match in
+# _trim_engine_name. Anything that is not valid UTF-8, or is already a
+# character string, is returned unchanged.
 sub _decode_argv_text {
     my ($value) = @_;
     return $value if !defined $value;
