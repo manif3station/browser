@@ -121,6 +121,11 @@ caveat above for the one way this can still hang.
   The table is written as UTF-8, like the json output, so accented or
   non-Latin titles print correctly with no `Wide character` warning
   (D2B-238).
+- A non-ASCII URL or search query given on the command line is treated
+  as UTF-8 text (D2B-239): `browser.search "café"` searches for `café`
+  (`q=caf%C3%A9`) and the `query`/`requested_url` values echoed in json
+  and table output show the text as typed. Only the positional URL and
+  query are decoded; invalid UTF-8 is passed through unchanged.
   `--help`/`--version` still win over a malformed `-o` value, exactly
   like every other flag (D2B-096).
 

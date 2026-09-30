@@ -77,6 +77,8 @@ title          Google
 
 `-o table` intentionally omits `body`/`body_text`/`headers` - it is a *summary*, matching the workspace convention's own distinction between the default view and `-o json`'s full underlying payload; use `-o json` when the full payload is actually needed. `browser.png`/`browser.pdf` don't accept `-o` at all (they already print just the destination file path, which is out of this flag's scope) - passing it there is refused as an unrecognized option. `--help`/`--version` still take priority over a malformed `-o` value. `-o table` is written as UTF-8, exactly like the json output, so a title such as `Café — Menu` prints correctly on a UTF-8 terminal and no `Wide character in print` warning is emitted (D2B-238); before that fix a character between U+0080 and U+00FF, such as the `é`, was written as a single invalid byte.
 
+A non-ASCII URL or search query typed on the command line is treated as UTF-8 text (D2B-239): `browser.search "café"` asks the search engine for `q=caf%C3%A9`, and the `query` and `requested_url` values echoed in the json and table output show the text as typed. `@ARGV` reaches Perl as raw bytes, and before this fix those bytes were encoded a second time, so the engine was asked for the wrong term (`q=caf%C3%83%C2%A9`, the text `cafÃ©`) and the echoed values came out garbled. Only the positional URL and query are decoded; a value that is not valid UTF-8 is passed through unchanged. Other arguments, such as `--engine`, `--data` and `--script`, are not affected.
+
 The skill declares its Node-side dependencies in `package.json`, matching the DD skill dependency contract. DD installs that file with:
 
 ```bash

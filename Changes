@@ -1,3 +1,22 @@
+0.189 2026-09-30
+ - (D2B-239) a non-ASCII URL or search query typed on the command line was
+   handled as bytes: @ARGV is raw undecoded bytes, but the library below
+   expects character strings, so the text was encoded twice. Found by a
+   skeptical review of D2B-238 and reproduced in the test container:
+   browser.search "café" asked the search engine for q=caf%C3%83%C2%A9
+   (the text "cafÃ©") instead of q=caf%C3%A9, so any accented, CJK or
+   emoji query searched for the wrong term; the query and requested_url
+   values echoed in json output were double-encoded; and the same two
+   table rows regressed under D2B-238's UTF-8 encoding, which is only
+   correct for character strings. Browser::CLI now decodes the positional
+   URL and query as strict UTF-8 through a small _decode_argv_text()
+   helper (unchanged for a value that is already characters or not valid
+   UTF-8). Only those two values are decoded - not all of argv, which
+   would put characters into error messages and break the byte-sequence
+   match in _trim_engine_name (D2B-086). New
+   t/239-d2b-239-argv-text-decoded.t covers the search URL, both echoes,
+   the get URL and the pass-through cases.
+
 0.188 2026-09-30
  - (D2B-238) -o table printed non-ASCII text without any encoding, while
    the json output emits UTF-8 bytes via encode_json. A title containing

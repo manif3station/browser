@@ -3,6 +3,7 @@ package Browser::CLI;
 use strict;
 use warnings;
 
+use Encode ();
 use File::Spec;
 use Getopt::Long qw(GetOptionsFromArray);
 use JSON::PP qw(encode_json);
@@ -175,6 +176,23 @@ sub sanitize_error {
 # applying the same regex to both closes that gap.
 # D2B-151: the regex was duplicated verbatim in both call sites -
 # extracted here so a future revision only needs one place to change.
+# D2B-239: @ARGV is raw bytes (see D2B-086 above) but the library below
+# takes character strings - uri_escape_utf8 in Browser::Search and the
+# json/table output all encode characters - so a non-ASCII URL or query
+# was encoded twice (q=caf%C3%83%C2%A9 for 'café') and the search engine
+# was asked for the wrong term. Only these two positional values are
+# decoded, deliberately not all of argv: decoding everything would put
+# characters into error messages that echo user text and would break the
+# byte-sequence match in _trim_engine_name. Anything that is not valid
+# UTF-8, or is already a character string, is returned unchanged.
+sub _decode_argv_text {
+    my ($value) = @_;
+    return $value if !defined $value;
+    my $copy    = $value;
+    my $decoded = eval { Encode::decode( 'UTF-8', $copy, Encode::FB_CROAK() ) };
+    return defined $decoded ? $decoded : $value;
+}
+
 sub _trim_engine_name {
     my ($name) = @_;
     $name =~ s/\A(?:\s|\xC2\xA0)+|(?:\s|\xC2\xA0)+\z//g;
@@ -270,6 +288,7 @@ sub execute {
 
     my $url = shift @argv;
     die "Missing URL" if !defined $url || $url =~ /\A\s*\z/;
+    $url = _decode_argv_text($url);
     die "Unexpected arguments: @argv" if @argv;
 
     die "--timeout-ms must not be negative"
@@ -360,6 +379,7 @@ sub execute_search {
 
     my $query = shift @argv;
     die "Missing query" if !defined $query || $query =~ /\A\s*\z/;
+    $query = _decode_argv_text($query);
     die "Unexpected arguments: @argv" if @argv;
 
     die "--max must not be negative" if $options{max} < 0;
