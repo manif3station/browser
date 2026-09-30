@@ -124,8 +124,14 @@ caveat above for the one way this can still hang.
 - A non-ASCII URL or search query given on the command line is treated
   as UTF-8 text (D2B-239): `browser.search "café"` searches for `café`
   (`q=caf%C3%A9`) and the `query`/`requested_url` values echoed in json
-  and table output show the text as typed. Only the positional URL and
-  query are decoded; invalid UTF-8 is passed through unchanged.
+  and table output show the text as typed. Invalid UTF-8 is passed
+  through unchanged.
+- The `--data`, `--script` and `--file` values are decoded the same way
+  (D2B-240): an accented POST body or script text reaches the browser
+  once-encoded, and the destination path printed by `browser.png`/
+  `browser.pdf` is written as UTF-8. Other arguments (`--engine`,
+  `--wait-until`, ...) are not decoded, so an error message that echoes
+  one still shows exactly what you typed.
   `--help`/`--version` still win over a malformed `-o` value, exactly
   like every other flag (D2B-096).
 

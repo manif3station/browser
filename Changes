@@ -1,3 +1,21 @@
+0.190 2026-09-30
+ - (D2B-240) follow-up to D2B-239, which decoded only the positional URL
+   and search query. The --data (browser.post body), --script (page or
+   controller script) and --file (png/pdf destination) values are also raw
+   @ARGV bytes, but Playwright's Perl client JSON-encodes every command
+   argument as characters, so they were encoded twice: verified in the
+   test container that encode_json of the bytes for "café" gives
+   caf + C3 83 C2 A9 where the decoded string gives the correct C3 A9.
+   Browser::CLI::execute now decodes those three values with the D2B-239
+   helper, and a new _encode_output_text() encodes text printed with no
+   encoding layer - the png/pdf destination path and error output - but
+   only when it is a decoded (UTF-8-flagged) string, so a default temp
+   path from $TMPDIR or an error that just echoes raw argv bytes is never
+   double-encoded. The rest of argv is still not decoded, because errors
+   that echo it (Unknown engine, Unexpected arguments, ...) are correct
+   today as bytes. New t/240-d2b-240-argv-options-decoded.t covers all of
+   it, including guards for those unchanged cases.
+
 0.189 2026-09-30
  - (D2B-239) a non-ASCII URL or search query typed on the command line was
    handled as bytes: @ARGV is raw undecoded bytes, but the library below

@@ -21,7 +21,7 @@ sub _run_and_report_errors {
     my ( $executor, $output_fh, $error_fh, %args ) = @_;
     my $result = eval { $executor->(%args) };
     if ( my $error = $@ ) {
-        print {$error_fh} sanitize_error($error), "\n";
+        print {$error_fh} _encode_output_text( sanitize_error($error) ), "\n";
         return ( 2, undef );
     }
 
@@ -90,7 +90,7 @@ sub main {
     return $exit_code if defined $exit_code;
 
     if ( $method eq 'PNG' || $method eq 'PDF' ) {
-        print {$output_fh} $result->{file}, "\n";
+        print {$output_fh} _encode_output_text( $result->{file} ), "\n";
         return 0;
     }
 
@@ -191,6 +191,17 @@ sub _decode_argv_text {
     my $copy    = $value;
     my $decoded = eval { Encode::decode( 'UTF-8', $copy, Encode::FB_CROAK() ) };
     return defined $decoded ? $decoded : $value;
+}
+
+# D2B-240: the counterpart of _decode_argv_text for text printed with no
+# encoding layer. A decoded value is a UTF-8-flagged character string and
+# must be encoded on the way out; anything else (a default temp path from
+# $TMPDIR, an error that only echoes raw argv bytes) is already bytes and
+# is printed as it is - encoding it again would double-encode it.
+sub _encode_output_text {
+    my ($text) = @_;
+    return $text if !defined $text || !utf8::is_utf8($text);
+    return Encode::encode( 'UTF-8', $text );
 }
 
 sub _trim_engine_name {
@@ -306,6 +317,14 @@ sub execute {
         die "--$flag is only read by $reader - it has no effect on $method"
           if defined $options{$key} && $blocked->($method);
     }
+
+    # D2B-240: same bytes-versus-characters problem D2B-239 fixed for the
+    # positional url/query - Playwright's Perl client JSON-encodes every
+    # command argument as characters, so these three were encoded twice
+    # (a POST body, a page script and an output file name). Decoded here
+    # and only here: the values other argv-echoing errors print (engine
+    # names, unexpected arguments, ...) must stay bytes.
+    $options{$_} = _decode_argv_text( $options{$_} ) for qw(data script file);
 
     my $interactive = $options{ask} || $options{askme} ? 1 : 0;
     my $controller = $options{playwright} || $options{agent} || $options{flow} ? 1 : 0;
