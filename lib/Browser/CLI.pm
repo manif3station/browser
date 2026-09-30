@@ -320,16 +320,21 @@ sub execute {
           if defined $options{$key} && $blocked->($method);
     }
 
+    my $interactive = $options{ask} || $options{askme} ? 1 : 0;
+    my $controller = $options{playwright} || $options{agent} || $options{flow} ? 1 : 0;
+
     # D2B-240: same bytes-versus-characters problem D2B-239 fixed for the
     # positional url/query - Playwright's Perl client JSON-encodes every
     # command argument as characters, so these three were encoded twice
     # (a POST body, a page script and an output file name). Decoded here
     # and only here: the values other argv-echoing errors print (engine
     # names, unexpected arguments, ...) must stay bytes.
-    $options{$_} = _decode_argv_text( $options{$_} ) for qw(data script file);
-
-    my $interactive = $options{ask} || $options{askme} ? 1 : 0;
-    my $controller = $options{playwright} || $options{agent} || $options{flow} ? 1 : 0;
+    # D2B-243: except the script in controller mode. There it is Perl
+    # source that Browser::Runner string-evals, so decoding it turned its
+    # literals into characters and an accented literal the script printed
+    # came out as a lone invalid byte; the runner gets it as typed.
+    $options{$_} = _decode_argv_text( $options{$_} ) for qw(data file);
+    $options{script} = _decode_argv_text( $options{script} ) if !$controller;
     $options{headless} = 0 if $interactive;
 
     my $runner = $args{runner} || Browser::Runner->new();

@@ -128,9 +128,13 @@ caveat above for the one way this can still hang.
   and table output show the text as typed. Invalid UTF-8 is passed
   through unchanged.
 - The `--data`, `--script` and `--file` values are decoded the same way
-  (D2B-240): an accented POST body or script text reaches the browser
+  (D2B-240): an accented POST body or page script reaches the browser
   once-encoded, and the destination path printed by `browser.png`/
-  `browser.pdf` is written as UTF-8. Other arguments (`--engine`,
+  `browser.pdf` is written as UTF-8. A Perl controller script
+  (`--playwright`, `--agent`, `--flow`) is the exception (D2B-243): it is
+  evaluated exactly as written, so an accented literal it prints comes
+  out right, but its literals are not decoded for Playwright - decode
+  them yourself (`Encode::decode`). Other arguments (`--engine`,
   `--wait-until`, ...) are not decoded, so an error message that echoes
   one still shows exactly what you typed.
 
