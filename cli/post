@@ -13,7 +13,7 @@ __END__
 
 =head1 NAME
 
-browser.post - Submit a POST request with Playwright and print the response payload as JSON (default) or a table summary (-o/--output table, D2B-208)
+browser.post - Submit a POST request with Playwright and print the response payload as JSON (default) or a table summary (-o/--output table)
 
 =head1 SYNOPSIS
 

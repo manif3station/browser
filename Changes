@@ -1,3 +1,17 @@
+0.187 2026-09-30
+ - (D2B-237) the -o/--output line printed by `--help` for browser.get,
+   browser.post and browser.search, and the perldoc NAME lines of cli/get
+   and cli/post, named the internal ticket D2B-208 - an identifier that
+   means nothing to a user, and "unchanged payload" only made sense to
+   someone who knew the pre-D2B-208 behavior. The help text now reads
+   "json (default, full payload) or table (a human-readable summary ...)"
+   and the NAME lines no longer name a ticket. A new test
+   (t/237-d2b-237-no-ticket-refs-in-user-visible-text.t) fails if a ticket
+   reference reappears in --help output or any cli/ NAME line. Ticket
+   references in code comments, README.md, SKILLS.md, docs/ and Changes
+   are the repo's changelog convention and are unchanged. Wording only,
+   no behavior change.
+
 0.186 2026-09-30
  - (D2B-236) t/148 checked the EXIT STATUS POD of a hand-maintained list
    of cli scripts (get post png search skills) that had drifted - cli/pdf

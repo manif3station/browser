@@ -105,8 +105,8 @@ sub _usage_get_post_png {
     my ($method) = @_;
     my $verb = $method eq 'GET' ? 'browser.get' : $method eq 'POST' ? 'browser.post' : $method eq 'PNG' ? 'browser.png' : 'browser.pdf';
     my $output_line = ( $method eq 'GET' || $method eq 'POST' )
-      ? "  -o, --output FORMAT     json (default, unchanged payload) or table (D2B-208, a human-\n"
-      . "                          readable summary - see docs/usage.md; not available on browser.png/browser.pdf)\n"
+      ? "  -o, --output FORMAT     json (default, full payload) or table (a human-readable\n"
+      . "                          summary - see docs/usage.md; not available on browser.png/browser.pdf)\n"
       : q{};
     return <<USAGE;
 Usage: $verb URL [OPTIONS]
@@ -138,8 +138,8 @@ Usage: browser.search QUERY [OPTIONS]
   --engines LIST          Try these engines in order, comma-separated (cannot combine with --engine)
   --max N                 Maximum results to return (default 10)
   --timeout-ms N          Per-engine request timeout in milliseconds
-  -o, --output FORMAT     json (default, unchanged payload) or table (D2B-208, a human-
-                          readable summary - see docs/usage.md)
+  -o, --output FORMAT     json (default, full payload) or table (a human-readable
+                          summary - see docs/usage.md)
   --help                  Print this usage text and exit
   --version               Print the installed skill's version and exit
 USAGE
