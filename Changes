@@ -1,3 +1,13 @@
+0.185 2026-09-30
+ - (D2B-235) follow-up to D2B-234, found by reviewing its commit: t/150's
+   "scanned > 0" check was satisfied by README.md and SKILLS.md alone,
+   because scan_for_non_zero() counts them too - so cli/, docs/, lib/
+   and t/ could all exist but be empty and the guard would still pass.
+   scan_for_non_zero() now also returns empty_dirs (directories that
+   exist but yielded no scanned file); t/150 asserts it is empty for the
+   real tree and, against a temporary tree of four empty directories,
+   that they are reported. Test-only change, no lib/ code touched.
+
 0.184 2026-09-30
  - (D2B-234) t/150's repo-wide "non-zero" wording scan could pass
    vacuously: a missing directory was skipped silently (`next if

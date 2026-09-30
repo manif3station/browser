@@ -48,7 +48,7 @@ sub scan_for_non_zero {
         $this_file,
     );
 
-    my ( @offending_files, @unreadable_files, @missing_dirs );
+    my ( @offending_files, @unreadable_files, @missing_dirs, @empty_dirs );
     my $scanned = 0;
 
     my $check = sub {
@@ -66,6 +66,7 @@ sub scan_for_non_zero {
             push @missing_dirs, $dir;
             next;
         }
+        my $scanned_before = $scanned;
         find(
             {
                 no_chdir => 1,
@@ -77,6 +78,7 @@ sub scan_for_non_zero {
             },
             $full_dir
         );
+        push @empty_dirs, $dir if $scanned == $scanned_before;
     }
     for my $top_level_file (qw(README.md SKILLS.md)) {
         my $path = File::Spec->catfile( $root, $top_level_file );
@@ -89,6 +91,7 @@ sub scan_for_non_zero {
         offending    => \@offending_files,
         unreadable   => \@unreadable_files,
         missing_dirs => \@missing_dirs,
+        empty_dirs   => \@empty_dirs,
     };
 }
 
@@ -107,5 +110,16 @@ my $empty_root = tempdir( CLEANUP => 1 );
 my $none       = scan_for_non_zero($empty_root);
 is( $none->{scanned}, 0, 'scanning a tree with nothing in it visits no files' );
 is_deeply( [ sort @{ $none->{missing_dirs} } ], [qw(cli docs lib t)], 'an empty tree is reported as missing every scanned directory' );
+
+# D2B-235: the scanned > 0 check above is satisfied by README.md and
+# SKILLS.md alone (they are counted too), so a directory that exists but
+# holds nothing scannable would still pass. empty_dirs closes that gap.
+is_deeply( $result->{empty_dirs}, [], 'cli/, docs/, lib/ and t/ each contributed at least one scanned file' );
+
+my $hollow_root = tempdir( CLEANUP => 1 );
+mkdir File::Spec->catdir( $hollow_root, $_ ) for qw(cli docs lib t);
+my $hollow = scan_for_non_zero($hollow_root);
+is_deeply( [ sort @{ $hollow->{empty_dirs} } ], [qw(cli docs lib t)], 'directories that exist but hold no scannable files are reported as empty' );
+is_deeply( $hollow->{missing_dirs}, [], 'existing-but-empty directories are not reported as missing' );
 
 done_testing();
