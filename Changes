@@ -1,3 +1,14 @@
+0.186 2026-09-30
+ - (D2B-236) t/148 checked the EXIT STATUS POD of a hand-maintained list
+   of cli scripts (get post png search skills) that had drifted - cli/pdf
+   was never in it, so deleting or rewording its EXIT STATUS section
+   would have passed unnoticed (the same omission D2B-205 found in
+   docs/overview.md). The list is now derived from the scripts actually
+   in cli/, so every current and future script is checked, with a floor
+   of six and an explicit check that pdf is included so an empty or
+   truncated glob cannot pass. Test-only change, no cli/ or lib/ code
+   touched.
+
 0.185 2026-09-30
  - (D2B-235) follow-up to D2B-234, found by reviewing its commit: t/150's
    "scanned > 0" check was satisfied by README.md and SKILLS.md alone,

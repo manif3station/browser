@@ -3,7 +3,7 @@ use warnings;
 
 use Test::More;
 use File::Spec;
-use File::Basename qw(dirname);
+use File::Basename qw(dirname basename);
 
 # D2B-148: cli/get/post/png/search's own EXIT STATUS POD said the vague
 # "non-zero" for their failure exit code, even though
@@ -15,7 +15,16 @@ use File::Basename qw(dirname);
 
 my $repo_root = File::Spec->catdir( dirname(__FILE__), '..' );
 
-for my $command (qw(get post png search skills)) {
+# D2B-236: this list used to be maintained by hand (get post png search
+# skills) and had drifted - cli/pdf was never in it, so its EXIT STATUS
+# POD went unchecked. It is now derived from the scripts actually in
+# cli/, so a script added later is checked automatically, and a floor
+# plus an explicit pdf check stop an empty or truncated glob passing.
+my @commands = sort map { basename($_) } glob File::Spec->catfile( $repo_root, 'cli', '*' );
+cmp_ok( scalar @commands, '>=', 6, 'found the cli scripts to check (at least the six known ones)' );
+ok( ( grep { $_ eq 'pdf' } @commands ), 'cli/pdf is among the scripts checked' );
+
+for my $command (@commands) {
     my $path = File::Spec->catfile( $repo_root, 'cli', $command );
     open my $fh, '<', $path or die "Unable to open $path: $!";
     my $text = do { local $/; <$fh> };
