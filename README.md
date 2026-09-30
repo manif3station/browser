@@ -514,6 +514,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 37. `--browser edge` launches Microsoft Edge via Playwright's `channel: 'msedge'` launch option rather than an `executablePath` - unlike `chrome`/`chromium`, it never inherits `CHROMIUM_BIN` or a PATH/direct-location-detected binary, even when one is configured (D2B-192).
 38. `browser.pdf` is refused with a clear error naming the Chromium-only restriction when `--browser firefox`/`webkit` is requested, before a browser is ever launched - Playwright's PDF export (Chromium DevTools' `printToPDF`) has no Firefox/WebKit support at all (D2B-196).
 39. `browser.get`/`browser.post`/`browser.search`'s `-o`/`--output` (D2B-208) defaults to `json` (unchanged) and accepts `table` as a new opt-in summary; `browser.png`/`browser.pdf` don't accept `-o` at all and refuse it as an unrecognized option, since they already print just the destination file path and this flag was deliberately scoped to only the three JSON-returning commands.
+40. `-o table` output is written as UTF-8, exactly like the json output: a title with an accented letter (a character between U+0080 and U+00FF, such as `é`) used to be printed as a single invalid byte and one with a character above U+00FF (an em dash, an emoji) made Perl print a `Wide character in print` warning; both now print correctly (D2B-238).
 
 ## Continuous Integration
 

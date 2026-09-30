@@ -75,7 +75,7 @@ is_captcha     no
 title          Google
 ```
 
-`-o table` intentionally omits `body`/`body_text`/`headers` - it is a *summary*, matching the workspace convention's own distinction between the default view and `-o json`'s full underlying payload; use `-o json` when the full payload is actually needed. `browser.png`/`browser.pdf` don't accept `-o` at all (they already print just the destination file path, which is out of this flag's scope) - passing it there is refused as an unrecognized option. `--help`/`--version` still take priority over a malformed `-o` value.
+`-o table` intentionally omits `body`/`body_text`/`headers` - it is a *summary*, matching the workspace convention's own distinction between the default view and `-o json`'s full underlying payload; use `-o json` when the full payload is actually needed. `browser.png`/`browser.pdf` don't accept `-o` at all (they already print just the destination file path, which is out of this flag's scope) - passing it there is refused as an unrecognized option. `--help`/`--version` still take priority over a malformed `-o` value. `-o table` is written as UTF-8, exactly like the json output, so a title such as `Café — Menu` prints correctly on a UTF-8 terminal and no `Wide character in print` warning is emitted (D2B-238); before that fix a character between U+0080 and U+00FF, such as the `é`, was written as a single invalid byte.
 
 The skill declares its Node-side dependencies in `package.json`, matching the DD skill dependency contract. DD installs that file with:
 

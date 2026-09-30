@@ -3,6 +3,8 @@ package Browser::CLI::TableOutput;
 use strict;
 use warnings;
 
+use Encode ();
+
 # D2B-216: extracted from Browser::CLI (which crossed this project's own
 # 500-line guideline after D2B-208 added -o/--output table rendering) -
 # the same extraction pattern already used for VersionCompare.pm
@@ -72,8 +74,20 @@ sub print_table_result {
     );
     push @rows, [ title => $result->{title} ] if $method eq 'GET';
     push @rows, [ script_result => 'yes (see -o json for the value)' ] if defined $result->{script_result};
-    print {$output_fh} render_field_table( \@rows );
+    _emit( $output_fh, render_field_table( \@rows ) );
     return 0;
+}
+
+# D2B-238: the table text is made of character strings, but the output
+# handle has no encoding layer (the json path prints the UTF-8 bytes
+# encode_json produced). Printing characters raw emitted a lone invalid
+# byte for U+0080-U+00FF and a "Wide character" warning above U+00FF, so
+# encode here - and deliberately not with a layer on the shared handle,
+# which would double-encode the json path's bytes.
+sub _emit {
+    my ( $output_fh, $text ) = @_;
+    print {$output_fh} Encode::encode( 'UTF-8', $text );
+    return;
 }
 
 sub render_field_table {
@@ -99,9 +113,9 @@ sub print_search_table_result {
         [ engines_tried => join( ', ', @{ $result->{engines_tried} || [] } ) ],
         [ result_count  => scalar @{ $result->{results} || [] } ],
     );
-    print {$output_fh} render_field_table( \@rows );
+    _emit( $output_fh, render_field_table( \@rows ) );
     for my $item ( @{ $result->{results} || [] } ) {
-        print {$output_fh} sprintf( "  %d. %s\n     %s\n", $item->{rank}, $item->{title}, $item->{url} );
+        _emit( $output_fh, sprintf( "  %d. %s\n     %s\n", $item->{rank}, $item->{title}, $item->{url} ) );
     }
     return 0;
 }

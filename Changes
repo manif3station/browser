@@ -1,3 +1,19 @@
+0.188 2026-09-30
+ - (D2B-238) -o table printed non-ASCII text without any encoding, while
+   the json output emits UTF-8 bytes via encode_json. A title containing
+   a character between U+0080 and U+00FF (an accented letter, copyright
+   sign, non-breaking space) came out as a single raw byte - invalid
+   UTF-8, shown as a replacement character on a UTF-8 terminal - and a
+   character above U+00FF (an em dash, an emoji) made Perl print "Wide
+   character in print" on stderr. Found by a JOB-003 hunt and reproduced
+   in the test container. lib/Browser/CLI/TableOutput.pm now encodes the
+   table text to UTF-8 at its three print sites through a small _emit()
+   helper - deliberately not with a :utf8 layer on the shared output
+   handle, which would double-encode the json path's bytes. New
+   t/238-d2b-238-table-output-utf8.t covers both character ranges for
+   get/post and search table output and asserts no warning is emitted.
+   The json output is unchanged.
+
 0.187 2026-09-30
  - (D2B-237) the -o/--output line printed by `--help` for browser.get,
    browser.post and browser.search, and the perldoc NAME lines of cli/get

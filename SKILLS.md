@@ -118,6 +118,9 @@ caveat above for the one way this can still hang.
   works. `browser.png`/`browser.pdf` don't accept `-o` at all (out of
   scope for this flag - they already print just the destination file
   path) - it's refused the same way any other unsupported flag is.
+  The table is written as UTF-8, like the json output, so accented or
+  non-Latin titles print correctly with no `Wide character` warning
+  (D2B-238).
   `--help`/`--version` still win over a malformed `-o` value, exactly
   like every other flag (D2B-096).
 
