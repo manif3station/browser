@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Browser::Runner ();
-use URI::Escape qw(uri_escape_utf8);
+use URI::Escape qw(uri_escape_utf8 uri_unescape);
 
 # D2B-153: public (not underscore-prefixed) since Browser::CLI, a
 # standalone module outside this module's own search() flow, reuses it
@@ -114,12 +114,29 @@ sub _parse_results {
 # own regex - this shared helper runs the common match/build/rank
 # loop, so each parser now differs only in the pattern it hands over.
 sub _parse_with_regex {
-    my ( $body, $regex ) = @_;
+    my ( $body, $regex, $url_filter ) = @_;
     my @results;
     while ( $body =~ /$regex/gs ) {
-        push @results, { url => _decode_entities($1), title => _strip_tags($2), snippet => _strip_tags($3) };
+        my ( $href, $title, $snippet ) = ( $1, $2, $3 );
+        my $url = _decode_entities($href);
+        $url = $url_filter->($url) if $url_filter;
+        push @results, { url => $url, title => _strip_tags($title), snippet => _strip_tags($snippet) };
     }
     return _rank(@results);
+}
+
+# D2B-241: DuckDuckGo's html results wrap every link in its own redirector
+# - observed live as //duckduckgo.com/l/?uddg=<percent-encoded target>&rut=
+# <token>, protocol-relative and pointing at DuckDuckGo rather than the
+# page - so the url handed back was not the reusable target the docs
+# promise. Only a link to duckduckgo.com's own /l/ redirector is followed,
+# and only to an http(s) target; anything else (no or empty uddg, another
+# host, a non-http target such as javascript:) is returned unchanged.
+sub _unwrap_duckduckgo_url {
+    my ($url) = @_;
+    return $url if $url !~ m{\A(?:https?:)?//duckduckgo\.com/l/\?(?:[^#]*&)?uddg=([^&#]*)}i;
+    my $target = uri_unescape($1);
+    return $target =~ m{\Ahttps?://}i ? $target : $url;
 }
 
 sub _parse_bing {
@@ -134,7 +151,7 @@ sub _parse_google {
 
 sub _parse_duckduckgo {
     my ($body) = @_;
-    return _parse_with_regex( $body, qr{<a\s+class="result__a"\s+href="([^"]+)">(.*?)</a>\s*<a\s+class="result__snippet">(.*?)</a>}s );
+    return _parse_with_regex( $body, qr{<a\s+class="result__a"\s+href="([^"]+)">(.*?)</a>\s*<a\s+class="result__snippet">(.*?)</a>}s, \&_unwrap_duckduckgo_url );
 }
 
 sub _rank {

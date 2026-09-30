@@ -1,3 +1,23 @@
+0.191 2026-09-30
+ - (D2B-241) DuckDuckGo search results returned DuckDuckGo's own redirect
+   wrapper as the url instead of the real target page. Observed live from
+   the test container (one genuine HTTP 200 response, 10 results): every
+   result link was //duckduckgo.com/l/?uddg=<percent-encoded target>&rut=
+   <token> - protocol-relative and pointing at DuckDuckGo - and
+   Browser::Search returned the decoded href untouched, so the url the
+   docs promise can be fed back into browser.get was not usable for that
+   engine. A new _unwrap_duckduckgo_url(), applied only by the DuckDuckGo
+   parser through an optional url filter on _parse_with_regex, returns
+   the percent-decoded uddg target; it follows only duckduckgo.com/l/
+   links and only to an http(s) target, and leaves everything else (no or
+   empty uddg, another host, a javascript: target) unchanged. Bing and
+   Google are untouched: their wrappers were not observed live. New
+   t/241-d2b-241-ddg-redirect-unwrapped.t is built from the three real
+   recorded hrefs. Not established: whether the DuckDuckGo parser's regex
+   matches today's full live markup - the fixture uses the anchor shape
+   the parser already expects, because DuckDuckGo bot-checked further
+   fetches.
+
 0.190 2026-09-30
  - (D2B-240) follow-up to D2B-239, which decoded only the positional URL
    and search query. The --data (browser.post body), --script (page or

@@ -146,6 +146,11 @@ D2B-115), `file`, `script_result` (if `--script` given, D2B-131 /
 D2B-196). Search:
 `query`, `engine_used`,
 `engines_tried`, `results` (each with `rank`, `title`, `url`, `snippet`).
+A DuckDuckGo result's `url` is the real target page (D2B-241): DuckDuckGo
+wraps every link in its own `//duckduckgo.com/l/?uddg=<target>&rut=...`
+redirector, and the `uddg` target is unwrapped; a link that is not such a
+redirector, or whose target is not an http(s) URL, is returned as it was.
+Bing and Google `url` values are not unwrapped.
 
 ## Prerequisites
 
