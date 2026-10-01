@@ -1,3 +1,18 @@
+0.195 2026-10-01
+ - (D2B-245) Browser::Runner::NodeRuntime::_run_quiet_command used $? >> 8
+   as the exit code. When system() cannot start the command at all (a
+   missing binary such as npx) it leaves -1 in $?, and -1 >> 8 is
+   72057594037927935, so the error said "Command failed: npx ... (exit code
+   72057594037927935)" and never said the command had not been run; the
+   real reason only appeared as a warning inside the captured stderr.
+   Reproduced in the test container before the fix. It now reads $! right
+   after system() and, for the -1 case, dies with "Command could not be
+   run: <command> (No such file or directory)". A command that starts and
+   exits with a status other than 0 keeps the existing "Command failed: ... (exit code N)"
+   message and its captured output. README.md edge case 44, docs/usage.md
+   and SKILLS.md describe it; t/245 pins the new message and guards the
+   unchanged ones.
+
 0.194 2026-10-01
  - (D2B-244) README.md (twice) and docs/usage.md listed only browser.get,
    browser.post, browser.png and browser.search as accepting --help, leaving

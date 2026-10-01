@@ -165,6 +165,12 @@ Bing and Google `url` values are not unwrapped.
   not something to work around, the real fix is upgrading Node.
   `--help` and `browser.skills` never call Playwright at all, so they
   work regardless of the installed Node version.
+- If the runtime install needs a command that cannot be started at all
+  (`npx` when it is not installed), the error reads "Command could not be
+  run: <command> (<reason>)" - for example "(No such file or directory)" -
+  not an exit code. A command that starts and fails is still reported as
+  "Command failed: <command> (exit code N)" with its captured output
+  (D2B-245).
 
 ## Known, disclosed limitations (not bugs)
 

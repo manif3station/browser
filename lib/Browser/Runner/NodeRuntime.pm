@@ -325,13 +325,19 @@ sub _run_quiet_command {
 
     # D2B-129: redirect-and-run runs inside eval so a mid-sequence failure
     # still reaches the restore below instead of stranding real STDOUT/STDERR.
-    my ( $ok, $exit );
+    my ( $ok, $exit, $not_run );
     my $run_ok = eval {
         open STDOUT, '>&', $stdout_fh or die "Unable to redirect STDOUT: $!";
         open STDERR, '>&', $stderr_fh or die "Unable to redirect STDERR: $!";
 
-        $ok   = system(@command) == 0;
-        $exit = $? >> 8;
+        $ok = system(@command) == 0;
+
+        # D2B-245: system() leaves -1 in $? when it cannot start the command
+        # at all (a missing binary), and -1 >> 8 is 72057594037927935, which
+        # the failure message used to print as an "exit code". $! still holds
+        # the reason here, so it is read before anything else can change it.
+        $not_run = $? == -1 ? "$!" : undef;
+        $exit    = $? >> 8;
         1;
     };
     my $redirect_error = $@;
@@ -350,6 +356,10 @@ sub _run_quiet_command {
         my $captured_stdout = _slurp_captured_output($stdout_path);
         my $captured_stderr = _slurp_captured_output($stderr_path);
         unlink $stdout_path, $stderr_path;
+        die "Command could not be run: @command ($not_run)\n"
+          . "captured stdout:\n$captured_stdout\n"
+          . "captured stderr:\n$captured_stderr\n"
+          if defined $not_run;
         die "Command failed: @command (exit code $exit)\n"
           . "captured stdout:\n$captured_stdout\n"
           . "captured stderr:\n$captured_stderr\n";
