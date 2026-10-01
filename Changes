@@ -1,3 +1,15 @@
+0.194 2026-10-01
+ - (D2B-244) README.md (twice) and docs/usage.md listed only browser.get,
+   browser.post, browser.png and browser.search as accepting --help, leaving
+   out browser.pdf. It accepts --help like the others - Browser::CLI::execute
+   answers --help for every method before it parses an option, and
+   'perl cli/pdf --help' prints the usage and exits 0 in the test container -
+   and docs/usage.md and SKILLS.md already said so elsewhere ('the five
+   commands', 'all five'). The three statements now name browser.pdf, and
+   t/244 checks every statement about --help against the cli/ scripts, so a
+   command added later cannot be left out again. Documentation and test
+   only; no code changed.
+
 0.193 2026-09-30
  - (D2B-243) regression in D2B-240 (0.190): it decoded the script option for
    every mode. That is right for a page script, but a Perl controller
