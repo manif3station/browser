@@ -86,11 +86,13 @@ a clear error before `pdf()` runs.
   Playwright, which conventionally disables the navigation timeout
   entirely - it does not mean "instant" and can genuinely hang, the
   same caveat browser.search documents below.
-- `--file PATH` — PNG-only screenshot destination; refused on GET/POST.
-  A name that already ends in `.png` in any letter case (`shot.PNG`,
-  `shot.Png`) is written as typed (D2B-248); before that, only lowercase
-  worked and `.PNG` exited 2 with `path: unsupported mime type "null"` and
-  wrote nothing. Any other name gets `.png` appended.
+- `--file PATH` — the destination file: the screenshot for `browser.png`
+  (`.png`) or the PDF for `browser.pdf` (`.pdf`); refused on GET/POST.
+  A name that already ends in the command's suffix in any letter case
+  (`shot.PNG`, `shot.Png`, `doc.PDF`) is written as typed; before D2B-248 a
+  `.PNG` name exited 2 with `path: unsupported mime type "null"` and wrote
+  nothing for `browser.png` (`browser.pdf` was never affected). Any other
+  name gets the suffix appended.
 
 ## Flags (browser.search)
 
