@@ -105,6 +105,8 @@ If `--file` is supplied without a `.png` suffix, the skill appends `.png`.
 
 If `--file` already ends in `.png`, the skill keeps the filename as-is and does not add another suffix. The match ignores letter case, so `--file Screenshot.PNG` and `--file shot.Png` are kept and written exactly as typed (D2B-248); until then only the lowercase form worked, and `.PNG` or `.Png` exited 2 with `path: unsupported mime type "null"` and wrote no file, because Playwright infers the image type from the extension and does not recognise the other spellings. The skill now states the type itself.
 
+If `--file` ends in a path separator (`/`, and `\` on Windows) it names a directory, not a file, and is refused with `--file ends with a path separator, so it names a directory, not a file: PATH - give a file name` before the page is loaded, exit 2, with nothing created or written (D2B-250). Until then `--file /tmp/shots/` exited 0 and left a hidden file named `.png` (or `.pdf`) inside `/tmp/shots`, creating that directory first if it was missing, because the suffix was appended to the empty file name. A bare name that happens to be an existing directory is not refused: `--file shots` follows the append-the-suffix rule and writes `shots.png` beside the directory.
+
 ## PDF Behavior
 
 `browser.pdf` (D2B-196) captures the rendered page after navigation and writes one PDF file, via Playwright's Chromium DevTools `printToPDF` - the same `--file` conventions as `browser.png` apply exactly (generated tmp path when omitted, `.pdf` appended when missing, kept as-is when already present).

@@ -30,7 +30,8 @@ with a clear error before a browser is ever launched, since Playwright's
 PDF export has no Firefox/WebKit support. Like `browser.png`, it prints
 just the destination file path to stdout (not a JSON payload), appends
 `.pdf` when `--file` omits it, and refuses with a clear error when
-`--file` names an existing directory. The page is measured under
+`--file` ends in a path separator or resolves to an existing directory
+(one literally named `doc.pdf`). The page is measured under
 `screen` media (forced explicitly, since `pdf()` otherwise renders under
 `print` media) and sized to exactly that measurement instead of
 Playwright's default paginated US-Letter output; the measurement must
@@ -92,7 +93,10 @@ a clear error before `pdf()` runs.
   (`shot.PNG`, `shot.Png`, `doc.PDF`) is written as typed; before D2B-248 a
   `.PNG` name exited 2 with `path: unsupported mime type "null"` and wrote
   nothing for `browser.png` (`browser.pdf` was never affected). Any other
-  name gets the suffix appended.
+  name gets the suffix appended. A name that ends in a path separator
+  (`/`, and `\` on Windows) names a directory, so it is refused before the
+  page is loaded (D2B-250): `--file /tmp/shots/` used to exit 0 and leave
+  a hidden `.png` inside `/tmp/shots`, creating the directory if needed.
 
 ## Flags (browser.search)
 
@@ -213,7 +217,10 @@ Bing and Google `url` values are not unwrapped.
 - `browser.png`/`browser.pdf`'s `--file` is refused with a clear error
   naming the path when it resolves to an existing directory (e.g. one
   literally named `shot.png`), instead of reaching Playwright's
-  screenshot()/pdf() call.
+  screenshot()/pdf() call. A bare name that is an existing directory is
+  not refused: it gets the suffix appended like any other bare name, so
+  `--file shots` writes `shots.png` beside the directory `shots`. Add a
+  trailing slash and it is refused (D2B-250).
 - `browser.pdf` only supports Chromium-based browsers - `--browser
   firefox`/`webkit` is refused with a clear error before a browser is
   ever launched (Playwright's PDF export has no support for either).

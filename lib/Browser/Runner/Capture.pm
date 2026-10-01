@@ -24,6 +24,24 @@ sub screenshot_path {
     return reserved_output_path( $requested, 'png' );
 }
 
+# D2B-250: a --file that ends in a path separator names a directory, never a
+# file, but reserved_output_path appended the extension to it anyway:
+# '--file /tmp/shots/' became '/tmp/shots/.png', _capture made /tmp/shots if
+# it was missing and wrote a hidden file named .png inside it, and the run
+# exited 0. The D2B-109 guard ('points at an existing directory') only sees
+# the path after the extension has been appended, so it never caught this.
+# A trailing separator is refused up front, before the page is loaded and
+# before anything is created or written. A backslash only counts as a
+# separator on Windows - elsewhere it is a legal file-name character.
+sub check_output_name {
+    my ($requested) = @_;
+    return 1 if !defined $requested || $requested eq q{};
+    my $separator = $^O eq 'MSWin32' ? qr{[/\\]} : qr{/};
+    die "--file ends with a path separator, so it names a directory, not a file: $requested - give a file name"
+      if $requested =~ /$separator\z/;
+    return 1;
+}
+
 sub reserved_output_path {
     my ( $requested, $extension ) = @_;
     if ( defined $requested && $requested ne q{} ) {
@@ -65,6 +83,8 @@ sub _capture {
     my $result_method = delete $args{result_method};
     my $extension = delete $args{extension};
     my $write = delete $args{write};
+
+    check_output_name( $args{file} );
 
     my $response = $page->goto( $args{url}, Browser::Runner::_goto_options(%args) );
 

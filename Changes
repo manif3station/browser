@@ -1,3 +1,28 @@
+0.200 2026-10-01
+ - (D2B-250) a --file that ends in a path separator wrote a hidden file
+   inside that directory. Capture::reserved_output_path appends the
+   extension to any name that does not already end in it, so
+   '--file /tmp/shots/' became '/tmp/shots/.png'; _capture then made
+   /tmp/shots if it was missing and wrote the file. Reproduced in the test
+   container with a data: URL and the real browser: 'browser.png --file
+   /tmp/d2b-dir/' exited 0 and left a hidden .png inside the directory,
+   browser.pdf left .pdf, and '--file /tmp/d2b-newdir/' created the
+   directory first. The D2B-109 guard ('--file points at an existing
+   directory') tests the path after the extension is appended, so it only
+   caught a directory literally named like shot.png, and SKILLS.md's claim
+   that browser.pdf refuses '--file' naming an existing directory was true
+   only in that narrow case. A trailing separator ('/', and '\' on Windows
+   only, since it is a legal file-name character elsewhere) is now refused
+   by the new Capture::check_output_name, called at the top of _capture,
+   with '--file ends with a path separator, so it names a directory, not a
+   file: PATH - give a file name': exit 2, before the page is loaded, and
+   nothing created or written (measured in the container). Every other
+   spelling is unchanged, including a bare name that is an existing
+   directory, which still gets the suffix appended and is written beside
+   the directory. README.md edge case 48, docs/usage.md and SKILLS.md
+   (including the corrected claim) describe it; t/250 pins it with a stub
+   page that records goto, screenshot and pdf calls.
+
 0.199 2026-10-01
  - (D2B-249) SKILLS.md - the agent manual that browser.skills prints
    verbatim - described --file in its flag list as "PNG-only screenshot
