@@ -1,3 +1,21 @@
+0.201 2026-10-01
+ - (D2B-251) eleven lines in README.md (85, 121, 125, 502, 505, 508, 512) and
+   docs/usage.md (205, 209, 338, 343) described behaviour as applying to
+   'browser.get/browser.post/browser.png' and never mentioned browser.pdf
+   (D2B-196): the concurrent-install lock, --data, --wait-until and
+   --timeout-ms handling, the negative --timeout-ms refusal, --timeout-ms 0,
+   the leading-dash URL misparse, headless by default, --ask/--askme and
+   --script/--jquery. Each statement was checked on the live browser.pdf in
+   the test container and is true for it too (negative --timeout-ms exits 2,
+   0 is accepted, a leading-dash URL is an unknown option, --data is refused,
+   --wait-until is read, and --ask and --no-headless both write a PDF), so the
+   lists were incomplete, not false - the same drift D2B-205 (docs/overview.md)
+   and D2B-244 (three --help statements) fixed once each. All eleven lines now
+   name browser.pdf, and t/251 fails on any line in README.md or
+   docs/usage.md that names browser.png with browser.get or browser.post but
+   never mentions pdf, so it cannot drift a third time. Documentation and test
+   only; no code changed.
+
 0.200 2026-10-01
  - (D2B-250) a --file that ends in a path separator wrote a hidden file
    inside that directory. Capture::reserved_output_path appends the
