@@ -153,6 +153,17 @@ sub sanitize_error {
     my ($error) = @_;
     chomp $error;
 
+    # D2B-247: an error raised through Playwright's request code is a Carp
+    # backtrace - the message, then tab-indented lines of the form
+    # "Package::sub(args) called at FILE line N" (and "eval {...} called at
+    # ..."). None of them ends in a period, so the pattern below never matched
+    # them and the whole trace was printed: internal file paths, object
+    # addresses and the caller's own arguments (14 lines for a mistyped
+    # --script). Each such line is dropped, together with the newline before
+    # it, so whatever follows the last one (a closing parenthesis in an
+    # aggregated search failure, say) stays attached to the message.
+    $error =~ s{\n\t[^\n]*?\bcalled at \S+ line \d+\.?}{}g;
+
     # D2B-180: was anchored to \z, so only a TRAILING "at FILE line N."
     # suffix was ever stripped. A message can carry more than one - e.g.
     # Browser::Search::search()'s aggregated failure text can embed an

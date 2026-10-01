@@ -1,3 +1,23 @@
+0.197 2026-10-01
+ - (D2B-247) an error raised through Playwright's request code was printed
+   with the Perl stack trace behind it. Browser::CLI::sanitize_error
+   (D2B-015, D2B-180) removed every "at FILE line N." suffix, but a Carp
+   backtrace is the message followed by tab-indented lines such as
+   "Playwright::Base::_do(Playwright::Page=HASH(0x...), ...) called at FILE
+   line N", which do not end in a period, so they all went through. In the
+   test container a mistyped --script ('return 1+') printed 14 lines and
+   2327 bytes to stderr - the real "Unexpected token '}'", then 13 lines
+   naming /usr/local/share/perl/.../Playwright/*.pm and
+   lib/Browser/Runner.pm, object addresses and the caller's own --script
+   and URL - and an unwritable --file (/proc/x.png) printed 15 lines.
+   sanitize_error now removes each backtrace line together with its
+   newline, so the same two commands print one line each (21 bytes for the
+   script typo) and still exit 2. Every other message is unchanged: the
+   at-FILE-line suffix, plain messages, multi-line messages with captured
+   output, an indented line that is not a backtrace line, and the words
+   "called at" with no file and line. README.md edge case 46,
+   docs/usage.md and SKILLS.md describe it; t/247 pins it.
+
 0.196 2026-10-01
  - (D2B-246) a mistyped --browser or --wait-until value was only refused
    after Playwright had been started: Browser::Runner::request created the

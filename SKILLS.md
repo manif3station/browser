@@ -140,6 +140,11 @@ caveat above for the one way this can still hang.
   them yourself (`Encode::decode`). Other arguments (`--engine`,
   `--wait-until`, ...) are not decoded, so an error message that echoes
   one still shows exactly what you typed.
+- A failing command prints its error to stderr and exits 2, and the error
+  is the message only (D2B-247): a mistyped `--script` prints
+  `Unexpected token '}'`, not the Perl stack trace behind it (14 lines
+  naming internal files, object addresses and your own arguments before).
+  The "at FILE line N." suffixes are dropped as well (D2B-015, D2B-180).
 
 ## Result payload shape
 
