@@ -77,7 +77,10 @@ a clear error before `pdf()` runs.
   stdin is already at EOF. No timeout on the initial navigation unless
   `--timeout-ms` is also given.
 - `--wait-until MODE` — `load`, `domcontentloaded`, `networkidle`.
-  Refused on POST.
+  Refused on POST. Any other value - like an unsupported `--browser` - is
+  refused at once, in about 50 ms, before Playwright or a browser is started
+  (D2B-246); before that it took about 4 s, because the browser was launched
+  first.
 - `--timeout-ms N` — refused with "must not be negative" if negative;
   refused entirely on POST. `0` is accepted and passed through to
   Playwright, which conventionally disables the navigation timeout

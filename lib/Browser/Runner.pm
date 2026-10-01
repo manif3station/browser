@@ -34,6 +34,15 @@ sub request {
           if $normalized eq 'firefox' || $normalized eq 'webkit';
     }
 
+    # D2B-246: the same goes for a mistyped --browser or --wait-until value.
+    # Both used to be refused only after the playwright object existed (a Node
+    # runtime check, then Playwright itself) and, for --wait-until, after a
+    # browser had been launched and a page opened - about 4 s measured, against
+    # about 60 ms for a value refused up front. browser.post never reads
+    # --wait-until (the CLI refuses the flag there), so it is left out.
+    Browser::Runner::BrowserPath::_validate_browser_type( $args{browser} );
+    _goto_options(%args) if $method ne 'POST';
+
     my $playwright = $self->{playwright_factory}
       ? $self->{playwright_factory}->(%args)
       : _new_playwright();

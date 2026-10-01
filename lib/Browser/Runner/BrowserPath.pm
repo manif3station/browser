@@ -9,12 +9,23 @@ use Browser::Runner::NodeRuntime ();
 
 my @SUPPORTED_BROWSER_TYPES = qw(chrome chromium firefox webkit edge);
 
-sub _launch_options {
-    my (%args) = @_;
-    my $requested = defined $args{browser} ? $args{browser} : 'chrome';
+# D2B-246: the check that refuses an unsupported --browser value, split out
+# of _launch_options so Browser::Runner::request can run it before the
+# playwright object is created. It only compares strings - it does not probe
+# for a browser binary, which has to stay lazy - and returns the lower-cased
+# type, so _launch_options keeps using the same value it always did.
+sub _validate_browser_type {
+    my ($requested) = @_;
+    $requested = 'chrome' if !defined $requested;
     my $normalized = lc($requested);
     die "Unsupported browser type: $requested (expected one of: @SUPPORTED_BROWSER_TYPES)"
       if !grep { $_ eq $normalized } @SUPPORTED_BROWSER_TYPES;
+    return $normalized;
+}
+
+sub _launch_options {
+    my (%args) = @_;
+    my $normalized = _validate_browser_type( $args{browser} );
     my $type = ( $normalized eq 'chromium' || $normalized eq 'edge' ) ? 'chrome' : $normalized;
     my %launch = (
         headless => $args{headless} ? 1 : 0,

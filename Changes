@@ -1,3 +1,21 @@
+0.196 2026-10-01
+ - (D2B-246) a mistyped --browser or --wait-until value was only refused
+   after Playwright had been started: Browser::Runner::request created the
+   playwright object (a Node runtime check, then Playwright itself) before
+   BrowserPath::_launch_options looked at --browser, and --wait-until was
+   not looked at until a browser had been launched and a page opened.
+   Measured in the test container: about 4.2 s for --wait-until bogus and
+   3.8 s for --browser safari (or --browser ''), against about 60 ms for a
+   value refused up front such as --timeout-ms -1. Both checks now run at
+   the top of request(), next to the browser.pdf Chromium-only check
+   (D2B-196): 53 ms after the change, with the same messages. The
+   browser-type check is split out of _launch_options as
+   BrowserPath::_validate_browser_type, which still does no binary probing;
+   --wait-until is checked through the existing _goto_options for every
+   method except POST, which never reads it. README.md edge case 45,
+   docs/usage.md and SKILLS.md describe it; t/246 pins it with a
+   playwright_factory that fails the test if it is ever called.
+
 0.195 2026-10-01
  - (D2B-245) Browser::Runner::NodeRuntime::_run_quiet_command used $? >> 8
    as the exit code. When system() cannot start the command at all (a
