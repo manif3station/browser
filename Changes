@@ -1,3 +1,23 @@
+0.198 2026-10-01
+ - (D2B-248) browser.png --file with an uppercase or mixed-case extension
+   (shot.PNG, shot.Png) exited 2 with 'path: unsupported mime type "null"'
+   and wrote nothing. reserved_output_path deliberately keeps a name that
+   already ends in the extension in any letter case, so 'shot.PNG' does not
+   become 'shot.PNG.png', but run_png then gave Playwright's
+   page->screenshot only a path and fullPage, so Playwright inferred the
+   image type from the extension - and it only recognises lowercase.
+   Reproduced in the test container with a data: URL and the real browser:
+   .png, no extension and .jpg (which gets .png appended) worked; .PNG and
+   .Png failed; browser.pdf --file doc.PDF worked, since page->pdf infers
+   nothing from the path. run_png now passes type => 'png' explicitly. The
+   file name always ends in .png in some case, so png is always right, and
+   the user's own spelling is left alone: the same matrix now writes
+   shot.PNG and shot.Png (a genuine 4831-byte PNG) and every other spelling
+   behaves as before. README.md edge case 47, docs/usage.md and SKILLS.md
+   describe it; t/248 pins it with a stub page that records the screenshot
+   options, and guards the path, fullPage, the temporary path and
+   browser.pdf.
+
 0.197 2026-10-01
  - (D2B-247) an error raised through Playwright's request code was printed
    with the Perl stack trace behind it. Browser::CLI::sanitize_error

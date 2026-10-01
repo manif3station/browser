@@ -123,9 +123,19 @@ sub run_png {
         extension     => 'png',
         write     => sub {
             my ( $page, $file ) = @_;
+
+            # D2B-248: without a type Playwright infers the image format
+            # from the file extension, and it does not recognise '.PNG' or
+            # '.Png' - 'browser.png --file shot.PNG' exited 2 with 'path:
+            # unsupported mime type "null"' and wrote nothing. reserved_
+            # output_path deliberately keeps a name that already ends in the
+            # extension in any case, and always makes the name end in .png
+            # otherwise, so png is always the right type; saying so stops the
+            # inference and leaves the user's own spelling alone.
             $page->screenshot(
                 {
                     path     => $file,
+                    type     => 'png',
                     fullPage => JSON::PP::true,
                 }
             );

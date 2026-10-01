@@ -103,7 +103,7 @@ If `--file` is omitted, the skill writes to a generated tmp path under `/tmp` an
 
 If `--file` is supplied without a `.png` suffix, the skill appends `.png`.
 
-If `--file` already ends in `.png`, the skill keeps the filename as-is and does not add another suffix.
+If `--file` already ends in `.png`, the skill keeps the filename as-is and does not add another suffix. The match ignores letter case, so `--file Screenshot.PNG` and `--file shot.Png` are kept and written exactly as typed (D2B-248); until then only the lowercase form worked, and `.PNG` or `.Png` exited 2 with `path: unsupported mime type "null"` and wrote no file, because Playwright infers the image type from the extension and does not recognise the other spellings. The skill now states the type itself.
 
 ## PDF Behavior
 

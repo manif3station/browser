@@ -87,6 +87,10 @@ a clear error before `pdf()` runs.
   entirely - it does not mean "instant" and can genuinely hang, the
   same caveat browser.search documents below.
 - `--file PATH` — PNG-only screenshot destination; refused on GET/POST.
+  A name that already ends in `.png` in any letter case (`shot.PNG`,
+  `shot.Png`) is written as typed (D2B-248); before that, only lowercase
+  worked and `.PNG` exited 2 with `path: unsupported mime type "null"` and
+  wrote nothing. Any other name gets `.png` appended.
 
 ## Flags (browser.search)
 
