@@ -5,29 +5,29 @@
 Installed DD usage:
 
 ```bash
-dashboard browser.get https://example.com
-dashboard browser.get https://example.com --script 'return document.title'
-dashboard browser.get https://example.com --ask
-dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
-dashboard browser.get https://example.com --flow --script 'my $response = $page->goto("https://www.iana.org/domains/example", { waitUntil => "load" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
-dashboard browser.get https://example.com/login --ask --timeout-ms 120000
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return document.title'
-dashboard browser.get https://x.com --wait-until load --script 'return document.title'
-dashboard browser.post https://example.com/form
-dashboard browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
-dashboard browser.png https://example.com
-dashboard browser.png https://example.com --file /tmp/example-shot
-dashboard browser.pdf https://example.com
-dashboard browser.pdf https://example.com --file /tmp/example-report
-dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
-dashboard browser.search 'query' --engine google
-dashboard browser.search 'query' --engines duckduckgo,bing --max 5
-dashboard browser.get https://example.com --no-headless
-dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
-dashboard browser.get https://example.com/account --keep-it-on
-dashboard browser.get --current --script 'return document.title'
-dashboard browser.get --help
-dashboard browser.get --version
+d2 browser.get https://example.com
+d2 browser.get https://example.com --script 'return document.title'
+d2 browser.get https://example.com --ask
+d2 browser.get https://example.com --jquery --script 'return $("h1").first().text()'
+d2 browser.get https://example.com --flow --script 'my $response = $page->goto("https://www.iana.org/domains/example", { waitUntil => "load" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+d2 browser.get https://example.com/login --ask --timeout-ms 120000
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return document.title'
+d2 browser.get https://x.com --wait-until load --script 'return document.title'
+d2 browser.post https://example.com/form
+d2 browser.post https://example.com/form --data 'name=dashboard' --script 'return document.body.textContent.trim()'
+d2 browser.png https://example.com
+d2 browser.png https://example.com --file /tmp/example-shot
+d2 browser.pdf https://example.com
+d2 browser.pdf https://example.com --file /tmp/example-report
+d2 browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
+d2 browser.search 'query' --engine google
+d2 browser.search 'query' --engines duckduckgo,bing --max 5
+d2 browser.get https://example.com --no-headless
+d2 browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
+d2 browser.get https://example.com/account --keep-it-on
+d2 browser.get --current --script 'return document.title'
+d2 browser.get --help
+d2 browser.get --version
 ```
 
 `--help` prints usage text and exits 0 for any of the five commands, taking priority over every other flag or missing-argument validation - it works even with no URL/query given, and even combined with other flags. `--version` prints the installed skill's version (read from `.env`) and exits 0 the same way (D2B-124) - `--help` still wins if both are given. `browser.skills` prints this skill's `SKILLS.md` agent manual.
@@ -67,7 +67,7 @@ Example GET payload shape:
 `browser.get`/`browser.post`/`browser.search` accept `-o`/`--output` (D2B-208): `json` (the default shown above, unchanged) or `table`, a new opt-in human-readable summary matching this workspace's own DD skill CLI output contract:
 
 ```text
-dashboard browser.get https://www.google.com -o table
+d2 browser.get https://www.google.com -o table
 
 method         GET
 requested_url  https://www.google.com
@@ -125,8 +125,8 @@ By default, `--script` accepts a Playwright JavaScript function body, matching t
 Examples:
 
 ```bash
-dashboard browser.get https://example.com --script 'return document.querySelector("h1").textContent'
-dashboard browser.post https://example.com/form --data "name=dd" --script 'return window.__BROWSER_POST__.status'
+d2 browser.get https://example.com --script 'return document.querySelector("h1").textContent'
+d2 browser.post https://example.com/form --data "name=dd" --script 'return window.__BROWSER_POST__.status'
 ```
 
 For `browser.post`, the skill loads the response content into a page before evaluating the script. It also exposes response metadata through `window.__BROWSER_POST__`.
@@ -155,13 +155,13 @@ This is the mode to use when the script needs to click, fill, navigate, log in, 
 Example:
 
 ```bash
-dashboard browser.get https://example.com/login --flow --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+d2 browser.get https://example.com/login --flow --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 ```
 
 Example with a fuller journey shape:
 
 ```bash
-dashboard browser.get https://example.com/login --playwright --script 'my $email = $page->select("#email"); $email->fill("user@example.com"); my $password = $page->select("#password"); $password->fill("secret"); my $submit = $page->select("button[type=submit]"); $submit->click(); my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+d2 browser.get https://example.com/login --playwright --script 'my $email = $page->select("#email"); $email->fill("user@example.com"); my $password = $page->select("#password"); $password->fill("secret"); my $submit = $page->select("button[type=submit]"); $submit->click(); my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 ```
 
 The final JSON payload is captured after the controller script finishes, so `final_url`, `title`, `body`, and `body_text` reflect the current page at the end of the flow.
@@ -171,7 +171,7 @@ The final JSON payload is captured after the controller script finishes, so `fin
 A controller script can also loop against the same `$page` object across multiple pages, collecting something from each one before returning. The shape below is illustrative, not a directly runnable finished example - unlike the single-hop examples above, it is missing a required piece that only the target site can determine, so treat it as a starting point to adapt rather than something to copy-paste as-is:
 
 ```bash
-dashboard browser.get https://example.com/results --flow --script 'my @titles; for ( 1 .. 3 ) { push @titles, $page->title(); my $next = $page->select("a.next-page"); last if !$next; $next->click(); } return { titles => \@titles };'
+d2 browser.get https://example.com/results --flow --script 'my @titles; for ( 1 .. 3 ) { push @titles, $page->title(); my $next = $page->select("a.next-page"); last if !$next; $next->click(); } return { titles => \@titles };'
 ```
 
 This clicks a `"a.next-page"` link up to three times, recording the page title before each click. The missing piece: after `$next->click()`, the next iteration's `$page->title()` read is only reliable once the new page has actually loaded (a full navigation) or the new content has actually rendered (a client-side swap) - which one applies, and how to detect it, depends entirely on the target site, so a real script needs its own wait/readiness step there (e.g. a short `sleep`, or checking for a site-specific element/URL change) before this pattern is safe to run unattended.
@@ -200,12 +200,12 @@ Playwright does not automatically provide jQuery in the page context.
 Example:
 
 ```bash
-dashboard browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
+d2 browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
 ```
 
 `--jquery` is for page-side extraction. It does not change Perl controller syntax.
 
-`--script`/`--jquery` also run for `browser.png` and `browser.pdf` - the script executes (and jQuery is injected first, if requested) against the loaded page before the screenshot is taken, and the script's return value appears in the result's `script_result` field exactly as it does for `browser.get`/`browser.post` (D2B-131), at the Perl API level. The `dashboard browser.png` CLI's own stdout does not carry that parity, though: it only ever prints the saved screenshot's file path, never the full JSON result `browser.get`/`browser.post`'s CLI output includes - so `script_result` is reachable via the Perl API return value, but not via `browser.png`'s own CLI output (D2B-136). Previously `browser.png` silently accepted and ignored both flags; now a failing `--script` (e.g. a JS error, or a missing jQuery runtime when `--jquery` is also given) causes `browser.png` itself to fail with that error, exactly as it already does for `browser.get`/`browser.post` - it is no longer a silent no-op, but it is also no longer immune to a script's own failures.
+`--script`/`--jquery` also run for `browser.png` and `browser.pdf` - the script executes (and jQuery is injected first, if requested) against the loaded page before the screenshot is taken, and the script's return value appears in the result's `script_result` field exactly as it does for `browser.get`/`browser.post` (D2B-131), at the Perl API level. The `d2 browser.png` CLI's own stdout does not carry that parity, though: it only ever prints the saved screenshot's file path, never the full JSON result `browser.get`/`browser.post`'s CLI output includes - so `script_result` is reachable via the Perl API return value, but not via `browser.png`'s own CLI output (D2B-136). Previously `browser.png` silently accepted and ignored both flags; now a failing `--script` (e.g. a JS error, or a missing jQuery runtime when `--jquery` is also given) causes `browser.png` itself to fail with that error, exactly as it already does for `browser.get`/`browser.post` - it is no longer a silent no-op, but it is also no longer immune to a script's own failures.
 
 ## Interactive Mode
 
@@ -225,19 +225,19 @@ When used:
 Example:
 
 ```bash
-dashboard browser.get 'https://www.google.com/search?q=developer+dashboard' --ask
+d2 browser.get 'https://www.google.com/search?q=developer+dashboard' --ask
 ```
 
 Example with controller mode:
 
 ```bash
-dashboard browser.get https://example.com/login --ask --agent --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+d2 browser.get https://example.com/login --ask --agent --script 'my $response = $page->goto("https://example.com/account", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
 ```
 
 If you still want a bounded initial wait in ask-mode:
 
 ```bash
-dashboard browser.get https://example.com/login --ask --timeout-ms 120000
+d2 browser.get https://example.com/login --ask --timeout-ms 120000
 ```
 
 ## Persistent Profiles and Keep Open
@@ -245,7 +245,7 @@ dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 Pass `--profile PATH` to `browser.get`, `browser.post`, `browser.png`, or `browser.pdf` to save and reuse cookies and local storage in a browser user-data directory. If a keep-open browser already uses that profile, later commands reconnect to its session:
 
 ```bash
-dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
+d2 browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
 ```
 
 The directory must not be in use by another browser process. For Chromium, use the parent of the profile directory shown as `Profile Path` at `chrome://version`. Recent Chrome versions do not support automation of the regular default profile; create a dedicated profile directory for the skill. Profile mode supports page JavaScript (`--script`) but not Perl controller mode (`--playwright`/`--agent`/`--flow`).
@@ -253,14 +253,21 @@ The directory must not be in use by another browser process. For Chromium, use t
 Add `--keep-it-on` to leave a visible browser window open after the automation finishes. The command returns while the detached browser remains open until the user closes its window; without `--profile`, later commands without a profile reconnect to the default keep-open session, and its temporary profile is removed when the browser closes. `--keep-it-on` cannot be combined with `--ask`/`--askme`:
 
 ```bash
-dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile" --keep-it-on
+d2 browser.get https://example.com/account --profile "$HOME/.browser-skill-profile" --keep-it-on
 ```
 
 Use `--current` with no URL to inspect the active page or capture it without navigating. Add the same `--profile` if the keep-open browser was started with one:
 
 ```bash
-dashboard browser.get --current --profile "$HOME/.browser-skill-profile" --script 'return { title: document.title, url: location.href }'
+d2 browser.get --current --profile "$HOME/.browser-skill-profile" --script 'return { title: document.title, url: location.href }'
+d2 browser.get --current --profile "$HOME/.browser-skill-profile"
 ```
+
+`browser.get --current` automatically adds a `tabs` array containing every
+open page's index, URL, title, and up to 4,000 characters of rendered text.
+`text_truncated` is true when the page has more text; `session_page` identifies
+the page used by the command. Use it when a user has navigated or opened
+multiple tabs in the keep-open window.
 
 ## Example Library
 
@@ -323,22 +330,22 @@ Example payload shape:
 
 If every engine in the list comes back walled, the command refuses with a structured error naming each one and pointing to `browser.get --ask` for interactive use, rather than hanging or returning an empty success.
 
-A query argument beginning with a literal `-` (e.g. `-test query`) is misparsed by Getopt::Long as an unknown option rather than being used as the query - pass it after a literal `--` separator (e.g. `dashboard browser.search -- -test query`) to have it treated as the positional query argument instead, Getopt::Long's own standard end-of-options convention (D2B-108).
+A query argument beginning with a literal `-` (e.g. `-test query`) is misparsed by Getopt::Long as an unknown option rather than being used as the query - pass it after a literal `--` separator (e.g. `d2 browser.search -- -test query`) to have it treated as the positional query argument instead, Getopt::Long's own standard end-of-options convention (D2B-108).
 
 ### Worked example: search, then fetch the top result
 
 The most common real workflow combines both commands: run `browser.search`, pull a result's `url` out of the JSON output, then run `browser.get` against that URL to fetch the actual page:
 
 ```sh
-url=$(dashboard browser.search 'developer dashboard skills' --max 1 | jq -r '.results[0].url')
-dashboard browser.get "$url" --script 'return document.title'
+url=$(d2 browser.search 'developer d2 skills' --max 1 | jq -r '.results[0].url')
+d2 browser.get "$url" --script 'return document.title'
 ```
 
 `jq -r '.results[0].url'` extracts the top result's already-entity-decoded URL (see above) as a raw string, safe to pass directly to `browser.get` without further escaping. This assumes at least one result came back - if `results` is empty, `.results[0].url` evaluates to `null` and `$url` becomes the literal string `"null"` rather than failing clearly, so check `.results | length > 0` first (or inspect `engines_tried` against a known engine list) before relying on `$url` in anything unattended.
 
 ## Edge Cases
 
-- if the skill is not installed, `dashboard browser.get` and `dashboard browser.post` will not dispatch
+- if the skill is not installed, `d2 browser.get` and `d2 browser.post` will not dispatch
 - if Playwright dependencies are missing, the command will fail until DD installs the skill dependencies
 - if the target URL cannot be reached, Playwright raises an error and the command exits 2
 - an error that Playwright raises is printed as its message only, on stderr, with exit 2: a mistyped `--script` (`return 1+`) prints `Unexpected token '}'` and an unwritable `--file` prints `ENOENT: no such file or directory, open '/proc/x.png'`. Until D2B-247 each of these was followed by the Perl stack trace behind it - 14 and 15 lines in the test container, naming internal files, object addresses and the caller's own arguments - because only the plain "at FILE line N." suffix was being removed (D2B-015, D2B-180); the tab-indented "called at FILE line N" backtrace lines are now removed too
@@ -370,6 +377,6 @@ dashboard browser.get "$url" --script 'return document.title'
 - if a command the skill needs cannot be started at all (`npx` for the Node runtime install, when it is not installed), the error reads `Command could not be run: <command> (<reason>)`, for example `(No such file or directory)`, instead of the meaningless `exit code 72057594037927935` it used to print (the -1 Perl leaves when a command never started, shifted right by 8); a command that starts and exits with a status other than 0 is still reported as `Command failed: <command> (exit code N)` with its captured stdout and stderr (D2B-245)
 - `--help` is recognized on `browser.get`/`browser.post`/`browser.png`/`browser.pdf`/`browser.search` and always short-circuits to printing usage text and exiting 0, taking priority over every other flag or missing-argument validation - passing `--help` alongside other flags, or with no URL/query at all, still just prints usage rather than attempting a request or reporting an unrelated error (D2B-096)
 - several other README.md Edge Cases entries (captcha-detection markup/title matching, `--ask`/`--askme` behavior, `--jquery` scope, and `browser.search`'s all-engines-walled failure, engine name validation, whitespace/case/dedup/empty-segment handling, HTML-entity decoding, and its own `--timeout-ms` negativity guard) are intentionally not duplicated here - they are documented once, above, in this file's Captcha Detection / Interactive Mode / jQuery Mode / Search Mode sections rather than maintained in two places (D2B-100)
-- a URL argument beginning with a literal `-` (e.g. `-example.com`) is misparsed by Getopt::Long as an unknown option rather than being used as the URL - pass it after a literal `--` separator (e.g. `dashboard browser.get -- -example.com`) to have it treated as the positional URL argument, Getopt::Long's own standard end-of-options convention (D2B-107)
-- the `--` escape above is itself honored even when the escaped positional value is literally `--help` or `--version` - `dashboard browser.get -- --version` treats `--version` as the literal URL rather than a version request, and `dashboard browser.search -- --help` treats `--help` as the literal query rather than a help request. The pre-parse help/version short-circuit stops scanning argv at a literal `--` the same way `Getopt::Long` itself does (D2B-186)
+- a URL argument beginning with a literal `-` (e.g. `-example.com`) is misparsed by Getopt::Long as an unknown option rather than being used as the URL - pass it after a literal `--` separator (e.g. `d2 browser.get -- -example.com`) to have it treated as the positional URL argument, Getopt::Long's own standard end-of-options convention (D2B-107)
+- the `--` escape above is itself honored even when the escaped positional value is literally `--help` or `--version` - `d2 browser.get -- --version` treats `--version` as the literal URL rather than a version request, and `d2 browser.search -- --help` treats `--help` as the literal query rather than a help request. The pre-parse help/version short-circuit stops scanning argv at a literal `--` the same way `Getopt::Long` itself does (D2B-186)
 - `--browser edge` launches Microsoft Edge via Playwright's `channel: 'msedge'` launch option, not an `executablePath` - `CHROMIUM_BIN`/PATH auto-detection (which applies to `chrome`/`chromium`) has no effect on an edge launch, even when configured (D2B-192)

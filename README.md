@@ -23,11 +23,11 @@ Without a shared browser skill, quick browser tasks usually fragment into shell 
 
 `browser` provides:
 
-- `dashboard browser.get <url>`
-- `dashboard browser.post <url>`
-- `dashboard browser.png <url>`
-- `dashboard browser.pdf <url>`
-- `dashboard browser.search <query>`
+- `d2 browser.get <url>`
+- `d2 browser.post <url>`
+- `d2 browser.png <url>`
+- `d2 browser.pdf <url>`
+- `d2 browser.search <query>`
 - JavaScript page-context scripting through `--script`
 - Perl controller scripting through `--playwright`, `--agent`, or `--flow`
 - jQuery injection through `--jquery`
@@ -41,12 +41,12 @@ Without a shared browser skill, quick browser tasks usually fragment into shell 
 
 This skill adds:
 
-- the dotted command `dashboard browser.get`
-- the dotted command `dashboard browser.post`
-- the dotted command `dashboard browser.png`
-- the dotted command `dashboard browser.pdf`
-- the dotted command `dashboard browser.search`
-- the dotted command `dashboard browser.skills`
+- the dotted command `d2 browser.get`
+- the dotted command `d2 browser.post`
+- the dotted command `d2 browser.png`
+- the dotted command `d2 browser.pdf`
+- the dotted command `d2 browser.search`
+- the dotted command `d2 browser.skills`
 - a DD skill example that depends on `aptfile`, `brewfile`, `cpanfile`, and `package.json`
 
 ## Layout
@@ -78,7 +78,7 @@ This skill adds:
 Install the skill into Developer Dashboard by repo name:
 
 ```bash
-dashboard skills install browser
+d2 skills install browser
 ```
 
 The skill's own home-root lookup (used to locate this `node_modules` tree and the jQuery runtime, not any literal `$HOME`-prefixed command below) falls back to `$ENV{USERPROFILE}` when `$ENV{HOME}` is unset (D2B-199) - Windows never sets `HOME` itself, only `USERPROFILE`, and a bare `$ENV{HOME} || die` died on every Windows invocation regardless of browser until this fallback was added; `HOME` still wins whenever both are set, on every platform.
@@ -104,20 +104,21 @@ See [LICENSE](LICENSE).
 Installed DD usage:
 
 ```bash
-dashboard browser.get https://example.com
-dashboard browser.get https://example.com --script 'return document.title'
-dashboard browser.get https://example.com --jquery --script 'return $("h1").first().text()'
-dashboard browser.png https://example.com
-dashboard browser.png https://example.com --file /tmp/example-shot
-dashboard browser.get https://example.com/login --ask --timeout-ms 120000
-dashboard browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
-dashboard browser.post https://example.com/form --data 'name=dashboard'
-dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
-dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile" --keep-it-on
-dashboard browser.get --current --profile "$HOME/.browser-skill-profile" --script 'return document.title'
-dashboard browser.get https://example.com --no-headless
-dashboard browser.get --help
-dashboard browser.get https://example.com -o table
+d2 browser.get https://example.com
+d2 browser.get https://example.com --script 'return document.title'
+d2 browser.get https://example.com --jquery --script 'return $("h1").first().text()'
+d2 browser.png https://example.com
+d2 browser.png https://example.com --file /tmp/example-shot
+d2 browser.get https://example.com/login --ask --timeout-ms 120000
+d2 browser.get https://example.com/start --flow --script 'my $response = $page->goto("https://example.com/final", { waitUntil => "networkidle" }); return { title => $page->title(), url => $page->url(), status => $response->status() };'
+d2 browser.post https://example.com/form --data 'name=dashboard'
+d2 browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
+d2 browser.get https://example.com/account --profile "$HOME/.browser-skill-profile" --keep-it-on
+d2 browser.get --current --profile "$HOME/.browser-skill-profile" --script 'return document.title'
+d2 browser.get --current --profile "$HOME/.browser-skill-profile"
+d2 browser.get https://example.com --no-headless
+d2 browser.get --help
+d2 browser.get https://example.com -o table
 ```
 
 `--help` prints usage text and exits 0 for any of `browser.get`/`browser.post`/`browser.png`/`browser.pdf`/`browser.search`, taking priority over every other flag or validation - it works even with no URL/query given, and even combined with other flags. `browser.skills` prints this skill's `SKILLS.md` agent manual.
@@ -128,7 +129,7 @@ dashboard browser.get https://example.com -o table
 
 `browser.get`/`browser.post`/`browser.png`/`browser.pdf` all run headless by default; pass `--headless`/`--no-headless` to set it explicitly. `--ask`/`--askme` and `--keep-it-on` force headless off, overriding an explicit `--headless`. `--keep-it-on` leaves a visible browser open after the command returns; it stays open until the user closes its window.
 
-Use `--profile PATH` on `browser.get`/`post`/`png`/`pdf` to launch or reconnect to a persistent browser context backed by that user-data directory. This saves cookies and local storage between calls. The directory must not be in use by another browser process; for Chromium, pass the parent of the profile directory shown by `chrome://version`. Playwright cannot automate Chrome's regular default profile on recent releases, so use a dedicated profile directory. With `--keep-it-on`, the command returns while its visible browser stays open until the user closes the window. Later commands with the same `--profile` reconnect to that open session. Without `--profile`, the most recent keep-open session is the default session and later commands without a profile reconnect to it. Use `--current` without a URL to inspect or capture the active page without navigating. This option also works without `--profile`, using a temporary profile. Profile/keep-open mode supports page JavaScript, but not Perl controller scripts (`--playwright`/`--agent`/`--flow`); `--keep-it-on` cannot be combined with `--ask`/`--askme`.
+Use `--profile PATH` on `browser.get`/`post`/`png`/`pdf` to launch or reconnect to a persistent browser context backed by that user-data directory. This saves cookies and local storage between calls. The directory must not be in use by another browser process; for Chromium, pass the parent of the profile directory shown by `chrome://version`. Playwright cannot automate Chrome's regular default profile on recent releases, so use a dedicated profile directory. With `--keep-it-on`, the command returns while its visible browser stays open until the user closes the window. Later commands with the same `--profile` reconnect to that open session. Without `--profile`, the most recent keep-open session is the default session and later commands without a profile reconnect to it. Use `--current` without a URL to inspect or capture the current session page without navigating. For `browser.get`, this automatically includes a `tabs` array with every open tab's URL, title, and up to 4,000 characters of rendered text; `text_truncated` identifies longer pages. This lets an agent inspect tabs opened by the user or by earlier commands. This option also works without `--profile`, using a temporary profile. Profile/keep-open mode supports page JavaScript, but not Perl controller scripts (`--playwright`/`--agent`/`--flow`); `--keep-it-on` cannot be combined with `--ask`/`--askme`.
 
 `browser.get`/`browser.post`/`browser.search` accept `-o`/`--output` (D2B-208), matching this workspace's own DD skill CLI output contract: `json` (the default, unchanged from every prior version - decodes to the identical structure, though not guaranteed byte-identical since JSON key order was never a stable guarantee across separate result instances either) or `table`, a new human-readable summary that intentionally omits `body`/`body_text`/`headers` (use `-o json` for those). `browser.png`/`browser.pdf` don't accept `-o` at all - out of this flag's scope, since they already print just the destination file path - passing it there is refused the same way any other unsupported flag is. `--help`/`--version` still take priority over a malformed `-o` value, exactly like every other flag (D2B-096).
 
@@ -146,7 +147,7 @@ perl cli/search 'which mini PC can run a ~30B Qwen3 at 1M context'
 `browser.search <query>` returns structured, ranked results (`rank`, `title`, `url`, `snippet`) from an ordered list of search engines, defaulting to bing, google, duckduckgo in that order.
 
 ```bash
-dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
+d2 browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
 ```
 
 If an engine's response looks CAPTCHA/bot-walled (the same `is_captcha` check `browser.get` already reports), the skill transparently tries the next engine instead of stopping. The response payload names which engine actually served the results (`engine_used`) and every engine that was tried (`engines_tried`). Results are not deduplicated by URL - two entries sharing the same URL (e.g. an ad plus its matching organic result on the source page) are both kept as separate results, each still consuming its own `--max` slot (D2B-175).
@@ -154,20 +155,20 @@ If an engine's response looks CAPTCHA/bot-walled (the same `is_captcha` check `b
 Override the engine order or limit the query to a single engine:
 
 ```bash
-dashboard browser.search 'query' --engine google
-dashboard browser.search 'query' --engines duckduckgo,bing
+d2 browser.search 'query' --engine google
+d2 browser.search 'query' --engines duckduckgo,bing
 ```
 
 Cap the number of results:
 
 ```bash
-dashboard browser.search 'query' --max 5
+d2 browser.search 'query' --max 5
 ```
 
 Each engine attempt is bounded by `--timeout-ms` (default 10000, i.e. 10 seconds), so a slow or unresponsive engine fails fast and moves on to the next one instead of stacking multiple long waits:
 
 ```bash
-dashboard browser.search 'query' --timeout-ms 5000
+d2 browser.search 'query' --timeout-ms 5000
 ```
 
 If every engine in the list comes back walled, the command fails with a structured error naming each walled engine and pointing to `browser.get --ask` for interactive use - the bounded per-engine timeout means it never hangs waiting for a response that will not come.
@@ -179,7 +180,7 @@ If every engine in the list comes back walled, the command fails with a structur
 If `--file` is provided without a `.png` suffix, the skill appends `.png` for the user:
 
 ```bash
-dashboard browser.png https://example.com --file /tmp/example-shot
+d2 browser.png https://example.com --file /tmp/example-shot
 ```
 
 Output:
@@ -191,13 +192,13 @@ Output:
 If `--file` already ends in `.png`, the skill keeps that filename unchanged:
 
 ```bash
-dashboard browser.png https://example.com --file /tmp/example-shot.png
+d2 browser.png https://example.com --file /tmp/example-shot.png
 ```
 
 If `--file` is omitted, the skill writes to a random tmp path and prints it:
 
 ```bash
-dashboard browser.png https://example.com
+d2 browser.png https://example.com
 ```
 
 Example output:
@@ -211,7 +212,7 @@ Example output:
 `browser.pdf` (D2B-196) captures a full-page PDF via Playwright's Chromium DevTools `printToPDF` and prints the saved path to stdout, mirroring `browser.png`'s `--file` conventions exactly (appends `.pdf` when omitted, keeps an existing `.pdf` suffix unchanged, writes to a random tmp path when `--file` is omitted entirely):
 
 ```bash
-dashboard browser.pdf https://example.com --file /tmp/example-report
+d2 browser.pdf https://example.com --file /tmp/example-report
 ```
 
 Output:
@@ -223,7 +224,7 @@ Output:
 PDF export is a Chromium-only Playwright capability - `--browser firefox`/`webkit` is refused with a clear error before a browser is even launched, since neither supports `page->pdf()` at all:
 
 ```bash
-dashboard browser.pdf https://example.com --browser firefox
+d2 browser.pdf https://example.com --browser firefox
 ```
 
 ```text
@@ -262,20 +263,20 @@ Do not use `--jquery` for Perl logic:
 - Perl controller scripts run outside the page
 - if a Perl controller script needs jQuery-powered extraction, call `$page->evaluate(...)` and use `window.jQuery(...)` inside that JavaScript
 
-`browser.png`/`browser.pdf` also run `--script`/`--jquery` before taking their screenshot/PDF (D2B-131, D2B-196), so a script can dismiss a cookie banner or scroll to an element first - the script's return value appears in the result's `script_result` field, matching `browser.get`/`browser.post`, at the Perl API level (`Browser::Runner->request()`'s return value). This parity does not extend to either command's own CLI stdout, though: `dashboard browser.png`/`dashboard browser.pdf` only ever print the saved file's path, unlike `browser.get`/`browser.post`'s CLI output, which prints the full JSON result including `script_result` (D2B-136). A failing script (or a missing jQuery runtime with `--jquery`) makes `browser.png`/`browser.pdf` fail too, exactly like `browser.get`/`browser.post` already do - neither is immune to script errors the way an old silent no-op once was.
+`browser.png`/`browser.pdf` also run `--script`/`--jquery` before taking their screenshot/PDF (D2B-131, D2B-196), so a script can dismiss a cookie banner or scroll to an element first - the script's return value appears in the result's `script_result` field, matching `browser.get`/`browser.post`, at the Perl API level (`Browser::Runner->request()`'s return value). This parity does not extend to either command's own CLI stdout, though: `d2 browser.png`/`d2 browser.pdf` only ever print the saved file's path, unlike `browser.get`/`browser.post`'s CLI output, which prints the full JSON result including `script_result` (D2B-136). A failing script (or a missing jQuery runtime with `--jquery`) makes `browser.png`/`browser.pdf` fail too, exactly like `browser.get`/`browser.post` already do - neither is immune to script errors the way an old silent no-op once was.
 
 ## Script Types
 
 Default `--script` mode is JavaScript:
 
 ```bash
-dashboard browser.get https://example.com --script 'return document.title'
+d2 browser.get https://example.com --script 'return document.title'
 ```
 
 Controller mode changes `--script` into Perl:
 
 ```bash
-dashboard browser.get https://example.com/login --playwright --script '
+d2 browser.get https://example.com/login --playwright --script '
 my $button = $page->select(q{button[type="submit"]});
 $button->click();
 return { url => $page->url(), title => $page->title() };
@@ -302,37 +303,37 @@ The rule for this skill is to prove, fix, and document examples in their working
 1. Read the title from `example.com`.
 
 ```bash
-dashboard browser.get https://example.com --script 'return document.title'
+d2 browser.get https://example.com --script 'return document.title'
 ```
 
 2. Read the first heading from `example.com`.
 
 ```bash
-dashboard browser.get https://example.com --script 'return document.querySelector("h1")?.textContent?.trim() || null'
+d2 browser.get https://example.com --script 'return document.querySelector("h1")?.textContent?.trim() || null'
 ```
 
 3. Read all links from `example.com`.
 
 ```bash
-dashboard browser.get https://example.com --script 'return Array.from(document.querySelectorAll("a")).map(a => a.href)'
+d2 browser.get https://example.com --script 'return Array.from(document.querySelectorAll("a")).map(a => a.href)'
 ```
 
 4. Read the page location object from `example.com`.
 
 ```bash
-dashboard browser.get https://example.com --script 'return { href: location.href, host: location.host, path: location.pathname }'
+d2 browser.get https://example.com --script 'return { href: location.href, host: location.host, path: location.pathname }'
 ```
 
 5. Use jQuery to read the first heading from `example.com`.
 
 ```bash
-dashboard browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
+d2 browser.get https://example.com --jquery --script 'return window.jQuery("h1").first().text()'
 ```
 
 6. Use Perl controller mode to read the current page URL and title.
 
 ```bash
-dashboard browser.get https://example.com --playwright --script '
+d2 browser.get https://example.com --playwright --script '
 return { url => $page->url(), title => $page->title() };
 '
 ```
@@ -340,7 +341,7 @@ return { url => $page->url(), title => $page->title() };
 7. Use Perl controller mode to jump from `example.com` to the IANA page.
 
 ```bash
-dashboard browser.get https://example.com --flow --script '
+d2 browser.get https://example.com --flow --script '
 my $response = $page->goto("https://www.iana.org/domains/example", { waitUntil => "load" });
 return { url => $page->url(), status => $response->status(), title => $page->title() };
 '
@@ -353,43 +354,43 @@ These verified Amazon examples start on search result URLs directly and use `--w
 8. Read the title from an Amazon search results page.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return document.title'
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return document.title'
 ```
 
 9. Count the Amazon search results.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return document.querySelectorAll("[data-component-type=\"s-search-result\"]").length'
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return document.querySelectorAll("[data-component-type=\"s-search-result\"]").length'
 ```
 
 10. Read the first five Amazon result titles.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"] h2")).slice(0, 5).map(h => h.textContent.trim())'
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"] h2")).slice(0, 5).map(h => h.textContent.trim())'
 ```
 
 11. Read the first five Amazon result links.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"] h2 a")).slice(0, 5).map(a => a.href)'
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"] h2 a")).slice(0, 5).map(a => a.href)'
 ```
 
 12. Read the first five Amazon result prices when present.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"]")).slice(0, 5).map(node => ({ title: node.querySelector("h2")?.textContent?.trim() || null, price: node.querySelector(".a-price .a-offscreen")?.textContent || null }))'
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --script 'return Array.from(document.querySelectorAll("[data-component-type=\"s-search-result\"]")).slice(0, 5).map(node => ({ title: node.querySelector("h2")?.textContent?.trim() || null, price: node.querySelector(".a-price .a-offscreen")?.textContent || null }))'
 ```
 
 13. Use jQuery to read Amazon result titles.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --jquery --script 'return window.jQuery("[data-component-type=\"s-search-result\"] h2").slice(0, 5).map((_, el) => window.jQuery(el).text().trim()).get()'
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --jquery --script 'return window.jQuery("[data-component-type=\"s-search-result\"] h2").slice(0, 5).map((_, el) => window.jQuery(el).text().trim()).get()'
 ```
 
 14. Use Perl controller mode on an Amazon search results page.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --playwright --script '
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --playwright --script '
 return {
   url     => $page->url(),
   title   => $page->title(),
@@ -401,7 +402,7 @@ return {
 15. Open the first Amazon search result from a verified search page.
 
 ```bash
-dashboard browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --playwright --script '
+d2 browser.get 'https://www.amazon.com/s?k=desk+lamp' --wait-until load --playwright --script '
 my $href = $page->evaluate(q{return document.querySelector("[data-component-type=\"s-search-result\"] h2 a")?.href || null});
 die "No Amazon search result link found\n" if !$href;
 $page->goto($href, { waitUntil => "load" });
@@ -416,43 +417,43 @@ These X examples were aligned to working live requests from `x.com` in the curre
 16. Read the logged-out X page title.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --script 'return document.title'
+d2 browser.get https://x.com --wait-until load --script 'return document.title'
 ```
 
 17. Detect whether the logged-out X shell exposes `main`.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --script 'return !!document.querySelector("main[role=main], main")'
+d2 browser.get https://x.com --wait-until load --script 'return !!document.querySelector("main[role=main], main")'
 ```
 
 18. Read all preload script URLs from the X shell.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --script 'return Array.from(document.querySelectorAll("link[rel=preload][as=\"script\"]")).map(link => link.href)'
+d2 browser.get https://x.com --wait-until load --script 'return Array.from(document.querySelectorAll("link[rel=preload][as=\"script\"]")).map(link => link.href)'
 ```
 
 19. Read whether the X shell references `abs.twimg.com`.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --script 'return document.documentElement.innerHTML.includes("abs.twimg.com")'
+d2 browser.get https://x.com --wait-until load --script 'return document.documentElement.innerHTML.includes("abs.twimg.com")'
 ```
 
 20. Read the visible shell text from X.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --script 'return document.querySelector("main")?.innerText || document.body.innerText'
+d2 browser.get https://x.com --wait-until load --script 'return document.querySelector("main")?.innerText || document.body.innerText'
 ```
 
 21. Use jQuery to read visible links from X.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --jquery --script 'return window.jQuery("a[href]").slice(0, 10).map((_, el) => ({ text: window.jQuery(el).text().trim(), href: el.href })).get()'
+d2 browser.get https://x.com --wait-until load --jquery --script 'return window.jQuery("a[href]").slice(0, 10).map((_, el) => ({ text: window.jQuery(el).text().trim(), href: el.href })).get()'
 ```
 
 22. Open the X login page with controller mode.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --playwright --script '
+d2 browser.get https://x.com --wait-until load --playwright --script '
 my $response = $page->goto("https://x.com/login", { waitUntil => "load" });
 return { url => $page->url(), status => $response->status(), title => $page->title() };
 '
@@ -461,7 +462,7 @@ return { url => $page->url(), status => $response->status(), title => $page->tit
 23. Jump from X to a public post URL with controller mode.
 
 ```bash
-dashboard browser.get https://x.com --wait-until load --flow --script '
+d2 browser.get https://x.com --wait-until load --flow --script '
 my $response = $page->goto("https://x.com/jack/status/20", { waitUntil => "load" });
 return { url => $page->url(), status => $response->status(), title => $page->title() };
 '
@@ -470,13 +471,13 @@ return { url => $page->url(), status => $response->status(), title => $page->tit
 24. Read the first article on a public X post page.
 
 ```bash
-dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'return document.querySelector("article")?.innerText || null'
+d2 browser.get https://x.com/jack/status/20 --wait-until load --script 'return document.querySelector("article")?.innerText || null'
 ```
 
 25. Read the `data-testid` values exposed on a public X post page.
 
 ```bash
-dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'return Array.from(document.querySelectorAll("[data-testid]")).map(el => el.getAttribute("data-testid")).filter(Boolean)'
+d2 browser.get https://x.com/jack/status/20 --wait-until load --script 'return Array.from(document.querySelectorAll("[data-testid]")).map(el => el.getAttribute("data-testid")).filter(Boolean)'
 ```
 
 ## Edge Cases
@@ -511,12 +512,12 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 28. `browser.get`/`browser.post`/`browser.png`/`browser.pdf` default to a headless browser; `--headless`/`--no-headless` sets it explicitly - useful for watching a non-interactive run without pausing for manual input. `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect when neither is used.
 29. If the system's `node` binary is older than v20 (`package.json` declares `"engines": { "node": ">=20" }`, matching Playwright's own declared minimum), the skill fails fast with a clear "Node.js v20+ is required ... found vN. Please upgrade Node.js." error before attempting to load Playwright, instead of letting the real cause surface later as a cryptic native error from deep inside Playwright's own module-loading chain.
 30. `--help` is recognized on `browser.get`/`browser.post`/`browser.png`/`browser.pdf`/`browser.search` and always short-circuits to printing usage text and exiting 0, taking priority over every other flag or missing-argument validation - passing `--help` alongside other flags, or with no URL/query at all, still just prints usage rather than attempting a request or reporting an unrelated error.
-31. A URL argument beginning with a literal `-` (e.g. `-example.com`) is misparsed as an unknown option rather than being used as the URL, since `browser.get`/`browser.post`/`browser.png`/`browser.pdf` share the same Getopt::Long-based option parser - pass it after a literal `--` separator (e.g. `dashboard browser.get -- -example.com`) to have it treated as the positional URL argument instead, Getopt::Long's own standard end-of-options convention.
-32. The same applies to `browser.search`'s query argument: a query beginning with a literal `-` (e.g. `-test query`) is misparsed as an unknown option rather than being used as the query - pass it after a literal `--` separator (e.g. `dashboard browser.search -- -test query`) to have it treated as the positional query argument instead.
+31. A URL argument beginning with a literal `-` (e.g. `-example.com`) is misparsed as an unknown option rather than being used as the URL, since `browser.get`/`browser.post`/`browser.png`/`browser.pdf` share the same Getopt::Long-based option parser - pass it after a literal `--` separator (e.g. `d2 browser.get -- -example.com`) to have it treated as the positional URL argument instead, Getopt::Long's own standard end-of-options convention.
+32. The same applies to `browser.search`'s query argument: a query beginning with a literal `-` (e.g. `-test query`) is misparsed as an unknown option rather than being used as the query - pass it after a literal `--` separator (e.g. `d2 browser.search -- -test query`) to have it treated as the positional query argument instead.
 33. `browser.png`'s `--file` is refused with a clear "--file points at an existing directory" error naming the path when it resolves to a path that is an existing directory (e.g. a directory literally named `shot.png`), instead of reaching Playwright's screenshot() call and surfacing a cryptic native error deep inside its own module-loading chain.
 34. `--script` is refused with "--script must not be empty" when passed an explicit empty string, in both plain JS mode and controller mode (`--playwright`/`--agent`/`--flow`) - D2B-158. Omitting `--script` entirely remains an unaffected silent no-op in plain JS mode; in controller mode, omitting `--script` entirely is refused with "Controller mode requires --script" too, matching the empty-string case - D2B-184.
 35. `--timeout-ms 0` on `browser.get`/`browser.post`/`browser.png`/`browser.pdf` (and `browser.search`) is accepted and passed straight through to Playwright, which conventionally treats a `0` timeout as *disabling* the navigation timeout entirely, not as an instant/zero-wait request - a `0` value can genuinely hang rather than fail fast. This is distinct from `--ask`/`--askme`'s own no-timeout default, which produces the same underlying `timeout: 0` behavior but via omitting `--timeout-ms` altogether rather than passing it explicitly - D2B-172.
-36. The `--` end-of-options escape from items 31/32 is itself honored even when the escaped positional value is literally `--help` or `--version` - `dashboard browser.get -- --version` treats `--version` as the literal URL rather than a version request, and `dashboard browser.search -- --help` treats `--help` as the literal query rather than a help request (D2B-186).
+36. The `--` end-of-options escape from items 31/32 is itself honored even when the escaped positional value is literally `--help` or `--version` - `d2 browser.get -- --version` treats `--version` as the literal URL rather than a version request, and `d2 browser.search -- --help` treats `--help` as the literal query rather than a help request (D2B-186).
 37. `--browser edge` launches Microsoft Edge via Playwright's `channel: 'msedge'` launch option rather than an `executablePath` - unlike `chrome`/`chromium`, it never inherits `CHROMIUM_BIN` or a PATH/direct-location-detected binary, even when one is configured (D2B-192).
 38. `browser.pdf` is refused with a clear error naming the Chromium-only restriction when `--browser firefox`/`webkit` is requested, before a browser is ever launched - Playwright's PDF export (Chromium DevTools' `printToPDF`) has no Firefox/WebKit support at all (D2B-196).
 39. `browser.get`/`browser.post`/`browser.search`'s `-o`/`--output` (D2B-208) defaults to `json` (unchanged) and accepts `table` as a new opt-in summary; `browser.png`/`browser.pdf` don't accept `-o` at all and refuse it as an unrecognized option, since they already print just the destination file path and this flag was deliberately scoped to only the three JSON-returning commands.
@@ -538,7 +539,7 @@ dashboard browser.get https://x.com/jack/status/20 --wait-until load --script 'r
 
 See:
 
-- `SKILLS.md` - the condensed, agent-facing manual (also printed verbatim by `dashboard browser.skills`)
+- `SKILLS.md` - the condensed, agent-facing manual (also printed verbatim by `d2 browser.skills`)
 - `docs/overview.md`
 - `docs/usage.md`
 - `docs/changes/2026-04-21-browser-gating.md`

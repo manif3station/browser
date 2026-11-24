@@ -1,3 +1,9 @@
+0.204 2026-11-24
+ - `browser.get --current` now includes a snapshot of every open tab in the
+   persistent browser session, with each tab's index, URL, title, and up to
+   4,000 characters of rendered text. Updated the agent and user documentation
+   to explain tab visibility and use `d2` in command examples.
+
 0.203 2026-11-24
  - Extended --keep-it-on into a local browser-session manager. Commands can
    reconnect to the active browser by reusing --profile, or use the default

@@ -8,12 +8,12 @@ Tira board.
 ## Commands
 
 ```
-dashboard browser.get <url> [OPTIONS]
-dashboard browser.post <url> [OPTIONS]
-dashboard browser.png <url> [OPTIONS]
-dashboard browser.pdf <url> [OPTIONS]
-dashboard browser.search <query> [OPTIONS]
-dashboard browser.skills
+d2 browser.get <url> [OPTIONS]
+d2 browser.post <url> [OPTIONS]
+d2 browser.png <url> [OPTIONS]
+d2 browser.pdf <url> [OPTIONS]
+d2 browser.search <query> [OPTIONS]
+d2 browser.skills
 ```
 
 `--help` works on all five of `get`/`post`/`png`/`pdf`/`search` - it always
@@ -86,6 +86,13 @@ a clear error before `pdf()` runs.
 - `--current` — run `browser.get`/`png`/`pdf` on the current page in the active
   keep-open session without navigating; omit the URL. With no profile, this
   reconnects to the default keep-open session.
+- `browser.get --current` automatically includes a `tabs` array for every
+  open tab in the keep-open session. Each entry has its index, URL, title,
+  and up to 4,000 characters of rendered text (`text_truncated` says when
+  more exists); `session_page` marks the page used by the command. Run this
+  after a user navigates or opens tabs so the agent can inspect the whole
+  window. Add the same `--profile PATH` used to start that session, if any.
+  Use default JSON output; `-o table` omits page text and the `tabs` array.
 - `--headless` / `--no-headless` — default headless=1. `--ask`/`--askme`
   and `--keep-it-on` force headless off, overriding an explicit `--headless`.
 - `--ask` / `--askme` — visible browser, waits for a real keypress on
@@ -176,6 +183,8 @@ caveat above for the one way this can still hang.
 GET/POST: `requested_url`, `final_url`, `method`, `status`, `title` (GET
 only), `content_type`, `headers` (full response header map, D2B-114),
 `body`, `body_text`, `is_captcha`, `script_result` (if `--script` given).
+`browser.get --current` also returns `tabs`, containing a text snapshot for
+each open page in the keep-open browser context.
 PNG/PDF: `requested_url`, `final_url`, `method`,
 `status`, `title`, `content_type`, `headers` (full response header map,
 D2B-115), `file`, `script_result` (if `--script` given, D2B-131 /
@@ -222,10 +231,10 @@ Bing and Google `url` values are not unwrapped.
   always HTML-escaped and wrapped in a `<pre>` block first.
 - A URL/query argument beginning with a literal `-` is misparsed as an
   unknown option on `get`/`post`/`png`/`search` alike - pass it after a
-  literal `--` separator (e.g. `dashboard browser.get -- -example.com`) to
+  literal `--` separator (e.g. `d2 browser.get -- -example.com`) to
   have it treated as the positional argument instead. This escape is itself
   honored even when the escaped value is literally `--help` or `--version`
-  (e.g. `dashboard browser.get -- --version` treats `--version` as the
+  (e.g. `d2 browser.get -- --version` treats `--version` as the
   literal URL, not a version request) - the help/version short-circuit
   respects a preceding `--` the same way `Getopt::Long` itself does
   (D2B-186).

@@ -144,8 +144,25 @@ async function runRequest(context, page, input) {
     headers: response ? response.headers() : {}, body,
     body_text: await page.evaluate(() => document.body ? document.body.innerText : ''),
   };
+  if (input.current) result.tabs = await snapshotTabs(context, page);
   if (input.script !== undefined) result.script_result = scriptResult === undefined ? null : scriptResult;
   return result;
+}
+
+async function snapshotTabs(context, sessionPage) {
+  const pages = context.pages();
+  return Promise.all(pages.map(async (tab, index) => {
+    const text = await tab.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
+    const limit = 4000;
+    return {
+      index,
+      session_page: tab === sessionPage,
+      url: tab.url(),
+      title: await tab.title().catch(() => ''),
+      text: text.slice(0, limit),
+      text_truncated: text.length > limit,
+    };
+  }));
 }
 
 async function startSessionServer(context, page, sessionFile) {
@@ -260,8 +277,12 @@ function escapeHTML(value) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-main().catch(error => {
-  const [, outputPath] = process.argv.slice(2);
-  try { writeResult(outputPath, { ok: false, error: error.message || String(error) }); } catch (_) {}
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch(error => {
+    const [, outputPath] = process.argv.slice(2);
+    try { writeResult(outputPath, { ok: false, error: error.message || String(error) }); } catch (_) {}
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { runRequest };
