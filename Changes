@@ -1,3 +1,13 @@
+0.202 2026-11-24
+ - Added --profile PATH for browser.get/post/png/pdf to reuse persistent
+   browser user-data directories across runs. Added --keep-it-on to open a
+   visible browser that stays open after the command returns until the user
+   closes its window.
+   These modes use a small Node-side Playwright worker because the Perl
+   client's launch wrapper does not expose persistent browser contexts.
+   Page JavaScript remains supported; Perl controller scripts are refused
+   in these modes.
+
 0.201 2026-10-01
  - (D2B-251) eleven lines in README.md (85, 121, 125, 502, 505, 508, 512) and
    docs/usage.md (205, 209, 338, 343) described behaviour as applying to

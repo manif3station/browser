@@ -121,6 +121,8 @@ Usage: $verb URL [OPTIONS]
   --data TEXT             POST body (browser.post only)
   --browser NAME          chrome (default), chromium, firefox, webkit, or edge (case-insensitive) -
                           browser.pdf only supports chrome/chromium/edge (Chromium-only PDF export)
+  --profile PATH          Use this browser user-data directory (browser.get/post/png/pdf only)
+  --keep-it-on            Keep the visible browser open until the user closes its window
   --headless / --no-headless   Run headless (default) or with a visible browser window
   --ask / --askme         Open a visible browser and wait for manual confirmation before continuing
   --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png/browser.pdf only)
@@ -300,6 +302,8 @@ sub execute {
             'flow!'        => \$options{flow},
             'data=s'       => \$options{data},
             'browser=s'    => \$options{browser},
+            'profile=s'    => \$options{profile},
+            'keep-it-on!'  => \$options{keep_it_on},
             'headless!'    => \$options{headless},
             'ask!'         => \$options{ask},
             'askme!'       => \$options{askme},
@@ -317,6 +321,7 @@ sub execute {
 
     die "--timeout-ms must not be negative"
       if defined $options{timeout_ms} && $options{timeout_ms} < 0;
+    die "--profile must not be empty" if defined $options{profile} && $options{profile} eq q{};
 
     my @flag_guards = (
         [ data       => 'browser.post',                       sub { $_[0] ne 'POST' } ],
@@ -332,6 +337,8 @@ sub execute {
     }
 
     my $interactive = $options{ask} || $options{askme} ? 1 : 0;
+    die "--keep-it-on cannot be combined with --ask/--askme"
+      if $options{keep_it_on} && $interactive;
     my $controller = $options{playwright} || $options{agent} || $options{flow} ? 1 : 0;
 
     # D2B-240: same bytes-versus-characters problem D2B-239 fixed for the
@@ -344,9 +351,9 @@ sub execute {
     # source that Browser::Runner string-evals, so decoding it turned its
     # literals into characters and an accented literal the script printed
     # came out as a lone invalid byte; the runner gets it as typed.
-    $options{$_} = _decode_argv_text( $options{$_} ) for qw(data file);
+    $options{$_} = _decode_argv_text( $options{$_} ) for qw(data file profile);
     $options{script} = _decode_argv_text( $options{script} ) if !$controller;
-    $options{headless} = 0 if $interactive;
+    $options{headless} = 0 if $interactive || $options{keep_it_on};
 
     my $runner = $args{runner} || Browser::Runner->new();
     return $runner->request(
@@ -357,6 +364,8 @@ sub execute {
         controller  => $controller,
         data        => $options{data},
         browser     => $options{browser},
+        profile     => $options{profile},
+        keep_it_on  => $options{keep_it_on},
         headless    => $options{headless},
         interactive => $interactive,
         wait_until  => $options{wait_until},

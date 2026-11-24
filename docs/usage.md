@@ -23,13 +23,15 @@ dashboard browser.search 'which mini PC can run a ~30B Qwen3 at 1M context'
 dashboard browser.search 'query' --engine google
 dashboard browser.search 'query' --engines duckduckgo,bing --max 5
 dashboard browser.get https://example.com --no-headless
+dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
+dashboard browser.get https://example.com/account --keep-it-on
 dashboard browser.get --help
 dashboard browser.get --version
 ```
 
 `--help` prints usage text and exits 0 for any of the five commands, taking priority over every other flag or missing-argument validation - it works even with no URL/query given, and even combined with other flags. `--version` prints the installed skill's version (read from `.env`) and exits 0 the same way (D2B-124) - `--help` still wins if both are given. `browser.skills` prints this skill's `SKILLS.md` agent manual.
 
-`browser.get`/`browser.post`/`browser.png`/`browser.pdf` all run headless by default; `--headless`/`--no-headless` sets it explicitly, useful for watching a non-interactive run without pausing for manual input. `--ask`/`--askme` unconditionally force headless off for their own interactive mode, overriding an explicit `--headless` - `--headless`/`--no-headless` only has an effect on a non-interactive run.
+`browser.get`/`browser.post`/`browser.png`/`browser.pdf` all run headless by default; `--headless`/`--no-headless` sets it explicitly. `--ask`/`--askme` and `--keep-it-on` force headless off, overriding an explicit `--headless`. `--keep-it-on` leaves the browser open after the command returns.
 
 Local repository usage during development:
 
@@ -235,6 +237,22 @@ If you still want a bounded initial wait in ask-mode:
 
 ```bash
 dashboard browser.get https://example.com/login --ask --timeout-ms 120000
+```
+
+## Persistent Profiles and Keep Open
+
+Pass `--profile PATH` to `browser.get`, `browser.post`, `browser.png`, or `browser.pdf` to save and reuse cookies and local storage in a browser user-data directory:
+
+```bash
+dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
+```
+
+The directory must not be in use by another browser process. For Chromium, use the parent of the profile directory shown as `Profile Path` at `chrome://version`. Recent Chrome versions do not support automation of the regular default profile; create a dedicated profile directory for the skill. Profile mode supports page JavaScript (`--script`) but not Perl controller mode (`--playwright`/`--agent`/`--flow`).
+
+Add `--keep-it-on` to leave a visible browser window open after the automation finishes. The command returns while the detached browser remains open until the user closes its window; without `--profile`, it uses a temporary profile that is removed when the browser closes. `--keep-it-on` cannot be combined with `--ask`/`--askme`:
+
+```bash
+dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile" --keep-it-on
 ```
 
 ## Example Library

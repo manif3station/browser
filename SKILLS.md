@@ -71,8 +71,18 @@ a clear error before `pdf()` runs.
   Playwright's own bundled binary. `edge` launches Microsoft Edge via
   Playwright's `channel: 'msedge'` option (Edge shares Chromium's engine,
   so it never gets `CHROMIUM_BIN`/`executablePath` treatment - D2B-192).
+- `--profile PATH` — use a persistent browser user-data directory for
+  `get`/`post`/`png`/`pdf`; cookies and local storage persist across calls.
+  Do not run another browser instance against the same directory. For
+  Chromium, use the parent of the `Profile Path` shown by `chrome://version`.
+  Profile mode supports page JavaScript, not Perl controller scripts.
+- `--keep-it-on` — force a visible browser that stays open after the command
+  returns until the user closes its window. Without `--profile`, a temporary
+  profile is used and removed after the window closes. This also supports
+  page JavaScript, not Perl controller scripts, and cannot be combined with
+  `--ask`/`--askme`.
 - `--headless` / `--no-headless` — default headless=1. `--ask`/`--askme`
-  unconditionally force headless off, overriding an explicit `--headless`.
+  and `--keep-it-on` force headless off, overriding an explicit `--headless`.
 - `--ask` / `--askme` — visible browser, waits for a real keypress on
   stdin before continuing. Refuses with "stdin is not interactive" if
   stdin is already at EOF. No timeout on the initial navigation unless

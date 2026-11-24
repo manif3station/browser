@@ -13,6 +13,7 @@ use JSON::PP qw(encode_json);
 use Browser::Runner::BrowserPath ();
 use Browser::Runner::Capture ();
 use Browser::Runner::NodeRuntime ();
+use Browser::Runner::Persistent ();
 
 sub new {
     my ( $class, %args ) = @_;
@@ -42,6 +43,12 @@ sub request {
     # --wait-until (the CLI refuses the flag there), so it is left out.
     Browser::Runner::BrowserPath::_validate_browser_type( $args{browser} );
     _goto_options(%args) if $method ne 'POST';
+
+    # Persistent profiles and keep-open runs need a persistent browser
+    # context. The Perl client currently exposes only BrowserType.launch(),
+    # so this narrow path delegates those requests to Playwright's Node API.
+    return Browser::Runner::Persistent::request(%args)
+      if defined $args{profile} || $args{keep_it_on};
 
     my $playwright = $self->{playwright_factory}
       ? $self->{playwright_factory}->(%args)

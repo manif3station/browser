@@ -1578,7 +1578,7 @@ like( $@, qr/Controller mode requires --script/, 'controller helper rejects miss
     close $marker_fh;
     my $cwd = Cwd::getcwd();
     chdir $temp_root or die "Unable to chdir to temp root: $!";
-    is( Browser::Runner::NodeRuntime::skill_root(), $temp_root, 'skill root falls back to the current skill repo during local development' );
+    is( Browser::Runner::NodeRuntime::skill_root(), Cwd::getcwd(), 'skill root falls back to the current skill repo during local development (including macOS /var path canonicalization)' );
     chdir $cwd or die "Unable to restore cwd: $!";
 }
 
