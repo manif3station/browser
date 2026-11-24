@@ -48,7 +48,7 @@ sub request {
     # context. The Perl client currently exposes only BrowserType.launch(),
     # so this narrow path delegates those requests to Playwright's Node API.
     return Browser::Runner::Persistent::request(%args)
-      if defined $args{profile} || $args{keep_it_on};
+      if defined $args{profile} || $args{keep_it_on} || $args{current};
 
     my $playwright = $self->{playwright_factory}
       ? $self->{playwright_factory}->(%args)

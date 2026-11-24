@@ -1,3 +1,10 @@
+0.203 2026-11-24
+ - Extended --keep-it-on into a local browser-session manager. Commands can
+   reconnect to the active browser by reusing --profile, or use the default
+   session when no profile was specified. Added --current to inspect/capture
+   the active page without navigating. Session metadata stays in a private
+   per-user cache and contains a random local-only bearer token.
+
 0.202 2026-11-24
  - Added --profile PATH for browser.get/post/png/pdf to reuse persistent
    browser user-data directories across runs. Added --keep-it-on to open a

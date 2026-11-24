@@ -73,6 +73,8 @@ a clear error before `pdf()` runs.
   so it never gets `CHROMIUM_BIN`/`executablePath` treatment - D2B-192).
 - `--profile PATH` — use a persistent browser user-data directory for
   `get`/`post`/`png`/`pdf`; cookies and local storage persist across calls.
+  Commands using the same profile reconnect to an active `--keep-it-on`
+  browser session.
   Do not run another browser instance against the same directory. For
   Chromium, use the parent of the `Profile Path` shown by `chrome://version`.
   Profile mode supports page JavaScript, not Perl controller scripts.
@@ -81,6 +83,9 @@ a clear error before `pdf()` runs.
   profile is used and removed after the window closes. This also supports
   page JavaScript, not Perl controller scripts, and cannot be combined with
   `--ask`/`--askme`.
+- `--current` — run `browser.get`/`png`/`pdf` on the current page in the active
+  keep-open session without navigating; omit the URL. With no profile, this
+  reconnects to the default keep-open session.
 - `--headless` / `--no-headless` — default headless=1. `--ask`/`--askme`
   and `--keep-it-on` force headless off, overriding an explicit `--headless`.
 - `--ask` / `--askme` — visible browser, waits for a real keypress on

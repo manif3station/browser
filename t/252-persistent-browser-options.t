@@ -22,6 +22,14 @@ is( $profile_result->{profile}, '/tmp/browser-profile', 'CLI forwards the profil
 is( $profile_result->{keep_it_on}, 1, 'CLI forwards --keep-it-on' );
 is( $profile_result->{headless}, 0, '--keep-it-on forces a visible browser even with --headless' );
 
+my $current_result = Browser::CLI::execute(
+    method => 'GET',
+    argv   => [ '--current', '--script', 'return document.title' ],
+    runner => PersistentOptionsRunner->new(),
+);
+ok( $current_result->{current}, '--current is forwarded without a URL' );
+is( $current_result->{url}, undef, '--current leaves URL unset so the active page is reused' );
+
 my $ask_error = eval {
     Browser::CLI::execute(
         method => 'GET',

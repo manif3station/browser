@@ -123,6 +123,7 @@ Usage: $verb URL [OPTIONS]
                           browser.pdf only supports chrome/chromium/edge (Chromium-only PDF export)
   --profile PATH          Use this browser user-data directory (browser.get/post/png/pdf only)
   --keep-it-on            Keep the visible browser open until the user closes its window
+  --current               Use the active keep-open session's current page (omit URL; get/png/pdf only)
   --headless / --no-headless   Run headless (default) or with a visible browser window
   --ask / --askme         Open a visible browser and wait for manual confirmation before continuing
   --wait-until MODE       load, domcontentloaded, or networkidle (browser.get/browser.png/browser.pdf only)
@@ -304,6 +305,7 @@ sub execute {
             'browser=s'    => \$options{browser},
             'profile=s'    => \$options{profile},
             'keep-it-on!'  => \$options{keep_it_on},
+            'current!'     => \$options{current},
             'headless!'    => \$options{headless},
             'ask!'         => \$options{ask},
             'askme!'       => \$options{askme},
@@ -315,8 +317,11 @@ sub execute {
     die "Invalid options: " . sanitize_error( join q{}, @getopt_warnings ) if !$getopt_ok;
 
     my $url = shift @argv;
-    die "Missing URL" if !defined $url || $url =~ /\A\s*\z/;
-    $url = _decode_argv_text($url);
+    die "Missing URL" if !$options{current} && ( !defined $url || $url =~ /\A\s*\z/ );
+    die "--current does not take a URL" if $options{current} && defined $url;
+    die "--current is only supported by browser.get/browser.png/browser.pdf"
+      if $options{current} && $method eq 'POST';
+    $url = _decode_argv_text($url) if defined $url;
     die "Unexpected arguments: @argv" if @argv;
 
     die "--timeout-ms must not be negative"
@@ -366,6 +371,7 @@ sub execute {
         browser     => $options{browser},
         profile     => $options{profile},
         keep_it_on  => $options{keep_it_on},
+        current     => $options{current},
         headless    => $options{headless},
         interactive => $interactive,
         wait_until  => $options{wait_until},

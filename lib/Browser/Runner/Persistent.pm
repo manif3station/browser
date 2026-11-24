@@ -9,6 +9,7 @@ use File::Spec;
 use File::Temp qw(tempfile);
 use JSON::PP qw(encode_json decode_json);
 use Time::HiRes qw(sleep);
+use Digest::SHA qw(sha256_hex);
 
 use Browser::Runner::BrowserPath ();
 use Browser::Runner::Capture ();
@@ -47,6 +48,12 @@ sub request {
     my $worker = File::Spec->catfile( Browser::Runner::NodeRuntime::skill_root(), 'libexec', 'persistent-browser.js' );
     my $playwright = File::Spec->catfile( $home, 'node_modules', 'playwright' );
     my $jquery = File::Spec->catfile( $home, 'node_modules', 'jquery', 'dist', 'jquery.min.js' );
+    my $profile = defined $args{profile} ? File::Spec->rel2abs( $args{profile} ) : undef;
+    my $session_dir = File::Spec->catdir( $home, '.developer-dashboard', 'cache', 'browser-sessions' );
+    make_path($session_dir) if !-d $session_dir;
+    chmod 0700, $session_dir;
+    my $session_key = defined $profile ? "profile:$profile" : 'default';
+    my $session_file = File::Spec->catfile( $session_dir, sha256_hex($session_key) . '.json' );
 
     my ( $input_fh, $input_path ) = tempfile( 'browser-profile-input-XXXXXX', DIR => File::Spec->tmpdir(), UNLINK => 1 );
     my ( $output_fh, $output_path ) = tempfile( 'browser-profile-output-XXXXXX', DIR => File::Spec->tmpdir(), UNLINK => 1 );
@@ -56,7 +63,8 @@ sub request {
         browser     => $args{browser} || 'chrome',
         headless    => $args{headless} ? JSON::PP::true : JSON::PP::false,
         keepItOn    => $args{keep_it_on} ? JSON::PP::true : JSON::PP::false,
-        profile     => $args{profile},
+        profile     => $profile,
+        current     => $args{current} ? JSON::PP::true : JSON::PP::false,
         script      => $args{script},
         jquery      => $args{jquery} ? JSON::PP::true : JSON::PP::false,
         jqueryPath  => $jquery,
@@ -68,6 +76,7 @@ sub request {
         executablePath => $launch{executablePath},
         channel     => $launch{channel},
         playwrightPath => $playwright,
+        sessionFile => $session_file,
     );
     print {$input_fh} encode_json(\%payload) or die "Unable to write persistent browser request: $!";
     close $input_fh or die "Unable to close persistent browser request: $!";

@@ -25,6 +25,7 @@ dashboard browser.search 'query' --engines duckduckgo,bing --max 5
 dashboard browser.get https://example.com --no-headless
 dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
 dashboard browser.get https://example.com/account --keep-it-on
+dashboard browser.get --current --script 'return document.title'
 dashboard browser.get --help
 dashboard browser.get --version
 ```
@@ -241,7 +242,7 @@ dashboard browser.get https://example.com/login --ask --timeout-ms 120000
 
 ## Persistent Profiles and Keep Open
 
-Pass `--profile PATH` to `browser.get`, `browser.post`, `browser.png`, or `browser.pdf` to save and reuse cookies and local storage in a browser user-data directory:
+Pass `--profile PATH` to `browser.get`, `browser.post`, `browser.png`, or `browser.pdf` to save and reuse cookies and local storage in a browser user-data directory. If a keep-open browser already uses that profile, later commands reconnect to its session:
 
 ```bash
 dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile"
@@ -249,10 +250,16 @@ dashboard browser.get https://example.com/account --profile "$HOME/.browser-skil
 
 The directory must not be in use by another browser process. For Chromium, use the parent of the profile directory shown as `Profile Path` at `chrome://version`. Recent Chrome versions do not support automation of the regular default profile; create a dedicated profile directory for the skill. Profile mode supports page JavaScript (`--script`) but not Perl controller mode (`--playwright`/`--agent`/`--flow`).
 
-Add `--keep-it-on` to leave a visible browser window open after the automation finishes. The command returns while the detached browser remains open until the user closes its window; without `--profile`, it uses a temporary profile that is removed when the browser closes. `--keep-it-on` cannot be combined with `--ask`/`--askme`:
+Add `--keep-it-on` to leave a visible browser window open after the automation finishes. The command returns while the detached browser remains open until the user closes its window; without `--profile`, later commands without a profile reconnect to the default keep-open session, and its temporary profile is removed when the browser closes. `--keep-it-on` cannot be combined with `--ask`/`--askme`:
 
 ```bash
 dashboard browser.get https://example.com/account --profile "$HOME/.browser-skill-profile" --keep-it-on
+```
+
+Use `--current` with no URL to inspect the active page or capture it without navigating. Add the same `--profile` if the keep-open browser was started with one:
+
+```bash
+dashboard browser.get --current --profile "$HOME/.browser-skill-profile" --script 'return { title: document.title, url: location.href }'
 ```
 
 ## Example Library
